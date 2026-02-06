@@ -171,13 +171,15 @@ const RegisterMeal: React.FC<RegisterMealProps> = ({ onSave, onUpdate, history =
         }
       } catch (error) {
         console.error("Erro na análise:", error);
-        alert("Não foi possível analisar a imagem. Você pode preencher manualmente.");
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        alert(`Erro na análise: ${errorMsg}\n\nVocê pode preencher manualmente.`);
       } finally {
         setIsAnalyzing(false);
       }
     } catch (error) {
       console.error("Erro ao processar arquivo:", error);
-      alert("Erro ao processar a imagem. Tente novamente ou preencha manualmente.");
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      alert(`Erro ao processar imagem: ${errorMsg}`);
       setIsAnalyzing(false);
     }
   };
