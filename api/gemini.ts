@@ -26,7 +26,7 @@ interface GeminiApiResponse {
 
 // Model constants
 const MODEL_STANDARD = 'gemini-1.5-flash';  // For chat, meal plans, recipes
-const MODEL_PREMIUM = 'gemini-2.5-flash';   // For food registration (photo + nutrition calc)
+const MODEL_PREMIUM = 'gemini-1.5-flash';   // TODO: Change to gemini-2.5-flash when billing is enabled
 
 async function callGemini(
     contents: GeminiContent | string,
