@@ -23,17 +23,17 @@ interface GeminiApiResponse {
     error?: { message: string };
 }
 
-// Model configuration - each model has its own API endpoint
+// Model configuration - each model has its own API endpoint (v1beta required for 2.5 models)
 const MODELS = {
     // For image analysis and nutrition calculation (more accurate)
     PREMIUM: {
         name: 'gemini-2.5-flash',
         apiUrl: 'https://generativelanguage.googleapis.com/v1beta/models'
     },
-    // For chat, meal plans, recipes (stable)
+    // For chat, meal plans, recipes (cheaper/faster)
     STANDARD: {
-        name: 'gemini-1.5-flash',
-        apiUrl: 'https://generativelanguage.googleapis.com/v1/models'
+        name: 'gemini-2.5-flash-lite',
+        apiUrl: 'https://generativelanguage.googleapis.com/v1beta/models'
     }
 };
 
