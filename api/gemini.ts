@@ -24,12 +24,17 @@ interface GeminiApiResponse {
     error?: { message: string };
 }
 
+// Model constants
+const MODEL_STANDARD = 'gemini-1.5-flash';  // For chat, meal plans, recipes
+const MODEL_PREMIUM = 'gemini-2.5-flash';   // For food registration (photo + nutrition calc)
+
 async function callGemini(
     contents: GeminiContent | string,
     systemInstruction?: string,
-    responseSchema?: Record<string, unknown>
+    responseSchema?: Record<string, unknown>,
+    usePremiumModel: boolean = false
 ): Promise<string> {
-    const model = 'gemini-2.0-flash';
+    const model = usePremiumModel ? MODEL_PREMIUM : MODEL_STANDARD;
 
     const requestBody: Record<string, unknown> = {
         contents: typeof contents === 'string'
@@ -162,7 +167,8 @@ async function handleAnalyzeFood(payload: Record<string, unknown>): Promise<stri
         required: ['name', 'calories', 'protein', 'carbs', 'fats', 'weight', 'ingredients']
     };
 
-    return callGemini(contents, undefined, schema);
+    // Use premium model for accurate food analysis
+    return callGemini(contents, undefined, schema, true);
 }
 
 // Handler for nutrition calculation
@@ -185,7 +191,8 @@ async function handleCalculateNutrition(payload: Record<string, unknown>): Promi
         required: ['calories', 'protein', 'carbs', 'fats']
     };
 
-    return callGemini(prompt, undefined, schema);
+    // Use premium model for accurate nutrition calculation
+    return callGemini(prompt, undefined, schema, true);
 }
 
 // Handler for meal plan generation
