@@ -38,11 +38,10 @@ interface ModelConfig {
 }
 
 // Model configuration - Orchestrated for optimal performance and cost
-// Note: API model names differ from Google AI Studio display names
 const MODELS = {
-    // Primary model for vision (photos) - best for image analysis
+    // Primary model for vision (photos) and complex logic (meal plans)
     VISION: {
-        name: 'gemini-2.0-flash',
+        name: 'gemini-3-flash',
         apiUrl: 'https://generativelanguage.googleapis.com/v1beta/models'
     },
     // Fallback for vision when quota is exceeded
@@ -52,7 +51,7 @@ const MODELS = {
     },
     // For complex calculations and meal planning
     LOGIC: {
-        name: 'gemini-2.0-flash',
+        name: 'gemini-3-flash',
         apiUrl: 'https://generativelanguage.googleapis.com/v1beta/models'
     },
     // For chat and recipes (cheaper/faster, higher RPM)
