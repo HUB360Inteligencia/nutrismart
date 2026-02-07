@@ -37,26 +37,26 @@ interface ModelConfig {
     apiUrl: string;
 }
 
-// Model configuration - Orchestrated for optimal performance and cost
+// Model configuration - Orchestrated using verified available models
 const MODELS = {
-    // Primary model for vision (photos) and complex logic (meal plans)
+    // Primary model for vision and complex logic (verified available)
     VISION: {
-        name: 'gemini-3-flash',
+        name: 'gemini-2.0-flash',
         apiUrl: 'https://generativelanguage.googleapis.com/v1beta/models'
     },
-    // Fallback for vision when quota is exceeded
+    // Fallback for vision
     VISION_FALLBACK: {
         name: 'gemini-2.5-flash',
         apiUrl: 'https://generativelanguage.googleapis.com/v1beta/models'
     },
     // For complex calculations and meal planning
     LOGIC: {
-        name: 'gemini-3-flash',
+        name: 'gemini-2.0-flash',
         apiUrl: 'https://generativelanguage.googleapis.com/v1beta/models'
     },
-    // For chat and recipes (cheaper/faster, higher RPM)
+    // For chat and recipes (Fast and available)
     LITE: {
-        name: 'gemini-2.5-flash-lite',
+        name: 'gemini-2.5-flash',
         apiUrl: 'https://generativelanguage.googleapis.com/v1beta/models'
     }
 };
