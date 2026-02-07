@@ -1,7 +1,15 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { createClient } from '@supabase/supabase-js';
 
-// Gemini API key is now server-side only (no VITE_ prefix)
+// Environment variables (server-side only)
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+// Supabase client for cache operations
+const supabase = SUPABASE_URL && SUPABASE_SERVICE_KEY
+    ? createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+    : null;
 
 interface GeminiRequest {
     action: 'chat' | 'analyze-food' | 'calculate-nutrition' | 'generate-meal-plan' | 'generate-recipes';
@@ -23,28 +31,61 @@ interface GeminiApiResponse {
     error?: { message: string };
 }
 
-// Model configuration - each model has its own API endpoint (v1beta required for 2.5 models)
+interface ModelConfig {
+    name: string;
+    apiUrl: string;
+}
+
+// Model configuration - Orchestrated for optimal performance and cost
 const MODELS = {
-    // For image analysis and nutrition calculation (more accurate)
-    PREMIUM: {
+    // Primary model for vision (photos) and complex logic (meal plans)
+    VISION: {
+        name: 'gemini-3-flash',
+        apiUrl: 'https://generativelanguage.googleapis.com/v1beta/models'
+    },
+    // Fallback for vision when quota is exceeded
+    VISION_FALLBACK: {
         name: 'gemini-2.5-flash',
         apiUrl: 'https://generativelanguage.googleapis.com/v1beta/models'
     },
-    // For chat, meal plans, recipes (cheaper/faster)
-    STANDARD: {
+    // For complex calculations and meal planning
+    LOGIC: {
+        name: 'gemini-3-flash',
+        apiUrl: 'https://generativelanguage.googleapis.com/v1beta/models'
+    },
+    // For chat and recipes (cheaper/faster, higher RPM)
+    LITE: {
         name: 'gemini-2.5-flash-lite',
         apiUrl: 'https://generativelanguage.googleapis.com/v1beta/models'
     }
 };
 
+// System prompt for nutrition expert
+const NUTRITION_EXPERT_PROMPT = `Você é um Especialista em Nutrição Computacional. Sua tarefa é analisar fotos de refeições e extrair: ingredientes, pesos estimados e macros (Calorias, Proteínas, Carboidratos, Gorduras).
+
+Regras Estritas:
+1. Retorne apenas um JSON puro, sem markdown ou explicações
+2. Use bases nutricionais como TACO (Brasil) ou USDA para os cálculos
+3. Estime o peso de cada porção baseado em referências visuais (tamanho do prato, utensílios)
+4. Se a imagem não for de comida, retorne {"error": "not_food"}
+5. Seja preciso nos valores nutricionais`;
+
+// Generate SHA-256 hash for image caching
+async function sha256(data: string): Promise<string> {
+    const encoder = new TextEncoder();
+    const dataBuffer = encoder.encode(data);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', dataBuffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// Core Gemini API call
 async function callGemini(
+    modelConfig: ModelConfig,
     contents: GeminiContent | string,
     systemInstruction?: string,
-    responseSchema?: Record<string, unknown>,
-    usePremiumModel: boolean = false
+    responseSchema?: Record<string, unknown>
 ): Promise<string> {
-    const modelConfig = usePremiumModel ? MODELS.PREMIUM : MODELS.STANDARD;
-
     const requestBody: Record<string, unknown> = {
         contents: typeof contents === 'string'
             ? [{ parts: [{ text: contents }] }]
@@ -78,6 +119,27 @@ async function callGemini(
     }
 
     return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+}
+
+// Call with automatic fallback on quota errors
+async function callWithFallback(
+    primary: ModelConfig,
+    fallback: ModelConfig | null,
+    contents: GeminiContent | string,
+    systemInstruction?: string,
+    responseSchema?: Record<string, unknown>
+): Promise<string> {
+    try {
+        return await callGemini(primary, contents, systemInstruction, responseSchema);
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        // If quota exceeded and we have a fallback, try it
+        if (fallback && (errorMessage.includes('quota') || errorMessage.includes('429') || errorMessage.includes('RESOURCE_EXHAUSTED'))) {
+            console.log(`Primary model ${primary.name} quota exceeded, falling back to ${fallback.name}`);
+            return await callGemini(fallback, contents, systemInstruction, responseSchema);
+        }
+        throw error;
+    }
 }
 
 // Handler for chat/advice
@@ -132,17 +194,35 @@ DADOS DO USUÁRIO (use para personalizar):
 HISTÓRICO DA CONVERSA:
 ${conversationHistory}`;
     }
-
-    return callGemini(message, systemInstruction);
+    // Use LITE model for chat (cheaper, higher RPM)
+    return callGemini(MODELS.LITE, message, systemInstruction);
 }
 
-// Handler for food image analysis
+// Handler for food image analysis with caching
 async function handleAnalyzeFood(payload: Record<string, unknown>): Promise<string> {
     const { base64Data, mimeType = 'image/jpeg' } = payload as {
         base64Data: string;
         mimeType?: string;
     };
 
+    // 1. Generate hash for caching
+    const imageHash = await sha256(base64Data.substring(0, 10000)); // Use first 10k chars for faster hashing
+
+    // 2. Check cache in Supabase
+    if (supabase) {
+        const { data: cached } = await supabase
+            .from('meal_analysis')
+            .select('analysis_result')
+            .eq('image_hash', imageHash)
+            .single();
+
+        if (cached?.analysis_result) {
+            console.log('Cache hit for image hash:', imageHash.substring(0, 16));
+            return JSON.stringify(cached.analysis_result);
+        }
+    }
+
+    // 3. Prepare request content
     const contents: GeminiContent = {
         parts: [
             { inlineData: { mimeType, data: base64Data } },
@@ -159,6 +239,7 @@ async function handleAnalyzeFood(payload: Record<string, unknown>): Promise<stri
             carbs: { type: 'NUMBER', description: 'Carboidratos totais em gramas' },
             fats: { type: 'NUMBER', description: 'Gorduras totais em gramas' },
             weight: { type: 'NUMBER', description: 'Estimativa do peso total da porção em gramas' },
+            error: { type: 'STRING', description: 'Se não for comida, retorne "not_food"' },
             ingredients: {
                 type: 'ARRAY',
                 description: 'Lista estimada de ingredientes que compõem o prato',
@@ -176,8 +257,32 @@ async function handleAnalyzeFood(payload: Record<string, unknown>): Promise<stri
         required: ['name', 'calories', 'protein', 'carbs', 'fats', 'weight', 'ingredients']
     };
 
-    // Use premium model for accurate food analysis
-    return callGemini(contents, undefined, schema, true);
+    // 4. Call Gemini with fallback (VISION -> VISION_FALLBACK)
+    const result = await callWithFallback(
+        MODELS.VISION,
+        MODELS.VISION_FALLBACK,
+        contents,
+        NUTRITION_EXPERT_PROMPT,
+        schema
+    );
+
+    // 5. Save to cache
+    if (supabase && result) {
+        try {
+            const parsedResult = JSON.parse(result);
+            if (!parsedResult.error) {
+                await supabase.from('meal_analysis').insert({
+                    image_hash: imageHash,
+                    analysis_result: parsedResult
+                });
+                console.log('Cached analysis for hash:', imageHash.substring(0, 16));
+            }
+        } catch (e) {
+            console.error('Failed to cache result:', e);
+        }
+    }
+
+    return result;
 }
 
 // Handler for nutrition calculation
@@ -200,8 +305,8 @@ async function handleCalculateNutrition(payload: Record<string, unknown>): Promi
         required: ['calories', 'protein', 'carbs', 'fats']
     };
 
-    // Use premium model for accurate nutrition calculation
-    return callGemini(prompt, undefined, schema, true);
+    // Use LOGIC model (Gemini 3 Flash) for accurate nutrition calculation
+    return callGemini(MODELS.LOGIC, prompt, undefined, schema);
 }
 
 // Handler for meal plan generation
@@ -294,8 +399,8 @@ As calorias totais do dia devem somar aproximadamente ${user.dailyCalorieGoal} k
         },
         required: ['meals']
     };
-
-    return callGemini(prompt, undefined, schema);
+    // Use LOGIC model (Gemini 3 Flash) for complex meal planning
+    return callGemini(MODELS.LOGIC, prompt, undefined, schema);
 }
 
 // Handler for recipe generation
@@ -326,8 +431,8 @@ Retorne um JSON.`;
             }
         }
     };
-
-    return callGemini(prompt, undefined, schema);
+    // Use LITE model for recipes (cheaper, higher RPM)
+    return callGemini(MODELS.LITE, prompt, undefined, schema);
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
