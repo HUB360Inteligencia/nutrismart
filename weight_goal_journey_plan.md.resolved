@@ -1,0 +1,312 @@
+# 🎯 Jornada de Meta de Peso - Plano de Implementação
+
+> **Objetivo**: Transformar o NutriSmart no melhor app de acompanhamento de emagrecimento/ganho de peso do mercado, superando MyFitnessPal.
+
+---
+
+## 📊 Análise Competitiva
+
+| Feature | MyFitnessPal | NutriSmart (Atual) | NutriSmart (Proposto) |
+|---------|--------------|--------------------|-----------------------|
+| Meta de peso | ✅ Básico | ❌ Não tem | ✅ Com timeline e milestones |
+| Ajuste dinâmico de calorias | ⚠️ Manual | ❌ Não tem | ✅ Automático por kg perdido |
+| Projeção de chegada | ⚠️ Estático | ❌ Não tem | ✅ IA atualiza semanalmente |
+| Modo Clínico (GLP-1) | ❌ Não tem | ✅ Tem | ✅ Integrado com metas |
+| Celebração de marcos | ⚠️ Básico | ⚠️ Badges | ✅ Milestones personalizados |
+
+---
+
+## 🏗️ Arquitetura Proposta
+
+### Novo Modelo de Dados
+
+```typescript
+// types.ts - Novas interfaces
+interface WeightGoal {
+  startWeight: number;      // Peso inicial ao criar meta
+  targetWeight: number;     // Peso desejado
+  startDate: string;        // Data de início
+  targetDate?: string;      // Data alvo (opcional)
+  estimatedDate?: string;   // Projeção calculada pela IA
+  weeklyGoal: number;       // Meta semanal (ex: -0.5kg ou +0.3kg)
+  milestones: WeightMilestone[];
+  status: 'active' | 'achieved' | 'paused';
+}
+
+interface WeightMilestone {
+  id: string;
+  targetWeight: number;     // Ex: 85kg (halfway)
+  title: string;            // "Metade do caminho!"
+  achievedAt?: string;
+  xpReward: number;
+}
+
+interface WeightEntry {
+  date: string;
+  weight: number;
+  note?: string;            // "Me senti mais leve"
+  source?: 'manual' | 'smart_scale' | 'wearable';
+}
+
+interface User {
+  // ... campos existentes
+  weightGoal?: WeightGoal;
+  weightHistory?: WeightEntry[];
+}
+```
+
+---
+
+## 📋 Fases de Implementação
+
+### FASE 1: Fundação (Tipos + Onboarding)
+**Prioridade: Alta | Estimativa: 3-4 horas**
+
+#### [MODIFY] [types.ts](file:///d:/SaaS/NutriSmart/nutrismart/types.ts)
+- Adicionar interfaces `WeightGoal`, `WeightMilestone`, [WeightEntry](file:///d:/SaaS/NutriSmart/nutrismart/pages/Progress.tsx#9-13)
+- Atualizar interface [User](file:///d:/SaaS/NutriSmart/nutrismart/types.ts#1-20) com `weightGoal` e `weightHistory`
+
+#### [MODIFY] [Onboarding.tsx](file:///d:/SaaS/NutriSmart/nutrismart/pages/Onboarding.tsx)
+- Adicionar step para definir meta de peso (se goal ≠ manter_peso)
+- Input para peso desejado com visualização do delta
+- Slider para velocidade: Conservador/Moderado/Agressivo
+- Projeção de data estimada baseada na velocidade
+
+#### [MODIFY] [nutritionCalculator.ts](file:///d:/SaaS/NutriSmart/nutrismart/services/nutritionCalculator.ts)
+- Calcular meta semanal baseada na velocidade
+- Função `estimateTargetDate(currentWeight, targetWeight, weeklyGoal)`
+
+---
+
+### FASE 2: Acompanhamento de Progresso
+**Prioridade: Alta | Estimativa: 4-5 horas**
+
+#### [MODIFY] [Progress.tsx](file:///d:/SaaS/NutriSmart/nutrismart/pages/Progress.tsx)
+- Seção hero: "Você está em X% do caminho para Ykg"
+- Gráfico de peso com linha de tendência e linha de meta
+- Projeção visual de quando alcançará a meta
+- Mini-celebrações ao atingir milestones
+
+#### [NEW] [WeightGoalCard.tsx](file:///d:/SaaS/NutriSmart/nutrismart/components/WeightGoalCard.tsx)
+- Card reutilizável para Dashboard e Progress
+- Mostra: peso atual vs meta, progresso %, dias restantes
+- Ícone de tendência (subindo/descendo)
+
+#### [MODIFY] [Dashboard.tsx](file:///d:/SaaS/NutriSmart/nutrismart/pages/Dashboard.tsx)
+- Integrar `WeightGoalCard` no topo
+- Mostrar "X kg para sua meta" de forma motivacional
+
+---
+
+### FASE 3: Ajuste Dinâmico de Calorias
+**Prioridade: Alta | Estimativa: 2-3 horas**
+
+#### [MODIFY] [nutritionCalculator.ts](file:///d:/SaaS/NutriSmart/nutrismart/services/nutritionCalculator.ts)
+- Recalcular metas quando peso muda significativamente (>1kg)
+- Usar peso atual da última pesagem (não o inicial)
+- Manter histórico de ajustes
+
+#### [NEW] [CalorieAdjustmentService.ts](file:///d:/SaaS/NutriSmart/nutrismart/services/CalorieAdjustmentService.ts)
+- Lógica para sugerir recálculo
+- Detectar platôs (4+ semanas sem mudança)
+- Alertar sobre velocidade de perda (>1kg/semana = warning)
+
+---
+
+### FASE 4: Inteligência Artificial
+**Prioridade: Média | Estimativa: 3-4 horas**
+
+#### [MODIFY] [api/gemini.ts](file:///d:/SaaS/NutriSmart/nutrismart/api/gemini.ts)
+Nova action: `analyze_weight_progress`
+- Input: histórico de peso, meta, meals, exercícios
+- Output: insights, ajustes sugeridos, motivação
+
+#### [NEW] [WeightInsightsCard.tsx](file:///d:/SaaS/NutriSmart/nutrismart/components/WeightInsightsCard.tsx)
+- Mostra análise semanal da IA
+- Exemplos:
+  - "Sua perda está dentro do saudável ✓"
+  - "Você tende a comer mais nos fins de semana"
+  - "Aumentar proteína pode acelerar resultados"
+
+---
+
+### FASE 5: Milestones e Gamificação
+**Prioridade: Média | Estimativa: 2-3 horas**
+
+#### [MODIFY] [gamificationService.ts](file:///d:/SaaS/NutriSmart/nutrismart/services/gamificationService.ts)
+- Novos badges de peso:
+  - "Primeiro Kilo" - Perdeu/ganhou 1kg
+  - "5kg Club" - 5kg de progresso
+  - "Metade do Caminho" - 50% da meta
+  - "Objetivo Alcançado" - 100% da meta
+
+#### [NEW] [MilestoneModal.tsx](file:///d:/SaaS/NutriSmart/nutrismart/components/MilestoneModal.tsx)
+- Celebração animada ao atingir milestone
+- Confetti + XP reward
+- Opção de compartilhar conquista
+
+---
+
+### FASE 6: Modo Clínico Avançado
+**Prioridade: Alta | Estimativa: 2 horas**
+
+#### [MODIFY] [Profile.tsx](file:///d:/SaaS/NutriSmart/nutrismart/pages/Profile.tsx)
+- Seção "Minha Jornada" para usuários clínicos
+- Correlação: peso vs dose do medicamento
+- Insights específicos para tirzepatida/semaglutida
+
+#### [MODIFY] [MedicalReportGenerator.tsx](file:///d:/SaaS/NutriSmart/nutrismart/components/MedicalReportGenerator.tsx)
+- Incluir gráfico de progresso de peso no relatório
+- Mostrar velocidade de perda e projeção
+
+---
+
+### FASE 7: Funcionalidades Avançadas (Diferencial Competitivo)
+**Prioridade: Alta | Estimativa: 4-5 horas**
+
+#### 7.1 Peso Ajustado para Obesidade (IMC > 30)
+
+**Problema**: Usuários obesos recebem metas de proteína insustentáveis.
+
+**Solução**: [MODIFY] [nutritionCalculator.ts](file:///d:/SaaS/NutriSmart/nutrismart/services/nutritionCalculator.ts)
+```typescript
+function calculateAdjustedWeight(
+  currentWeight: number, 
+  targetWeight: number, 
+  height: number
+): number {
+  const bmi = currentWeight / ((height / 100) ** 2);
+  
+  if (bmi < 30) return currentWeight; // Usar peso atual
+  
+  // Fórmula: P_adj = P_meta + 0.25 × (P_atual - P_meta)
+  return targetWeight + 0.25 * (currentWeight - targetWeight);
+}
+```
+
+| Exemplo | Sem Ajuste | Com Ajuste |
+|---------|------------|------------|
+| Usuário 130kg (meta 80kg) | 260g proteína | **185g** ✅ |
+
+---
+
+#### 7.2 Hidratação GLP-1 (+500ml)
+
+**Problema**: Usuários de tirzepatida desidratam facilmente.
+
+**Solução**: [MODIFY] [nutritionCalculator.ts](file:///d:/SaaS/NutriSmart/nutrismart/services/nutritionCalculator.ts)
+```typescript
+export function calculateWaterGoal(
+  weight: number, 
+  isClinicalMode: boolean = false
+): { waterMl: number; clinicalAlert?: string } {
+  const baseWater = Math.round(weight * 35);
+  
+  if (isClinicalMode) {
+    return {
+      waterMl: baseWater + 500, // +500ml para GLP-1
+      clinicalAlert: "⚠️ Medicamentos GLP-1 aumentam a necessidade hídrica. Mantenha o consumo de eletrólitos."
+    };
+  }
+  
+  return { waterMl: baseWater };
+}
+```
+
+---
+
+#### 7.3 Lógica Anti-Platô (IA-Powered)
+
+**Problema**: MyFitnessPal ignora platôs. Usuários desistem.
+
+**Solução**: [NEW] [PlateauDetectionService.ts](file:///d:/SaaS/NutriSmart/nutrismart/services/PlateauDetectionService.ts)
+
+```typescript
+interface PlateauAnalysis {
+  isPlateaued: boolean;
+  daysSinceChange: number;
+  adherenceScore: number;  // 0-100%
+  suggestion: 'refeed' | 'maintenance_week' | 'adjust_macros' | 'check_logs';
+  message: string;
+}
+
+function detectPlateau(
+  weightHistory: WeightEntry[],
+  mealLogs: Meal[],
+  last14Days: boolean = true
+): PlateauAnalysis {
+  // Critérios:
+  // - Variação < 0.5kg em 14 dias
+  // - Adesão >= 80%
+  // - Mínimo 3 pesagens
+}
+```
+
+**Ações por Cenário**:
+| Cenário | Sugestão |
+|---------|----------|
+| Platô + boa adesão + %BF baixo | Refeed Day |
+| Platô + boa adesão + déficit agressivo | Semana de manutenção |
+| Platô + baixa adesão | Alertar sobre precisão dos logs |
+
+---
+
+## 🎨 UX/UI Proposta
+
+```
+┌─────────────────────────────────────┐
+│  🎯 Sua Meta: 90kg → 75kg          │
+│  ━━━━━━━━━━━━●━━━━━━━━━━━         │
+│        40% concluído                │
+│                                     │
+│  📉 Atual: 84kg (-6kg)             │
+│  📅 Projeção: 15 de Maio           │
+│  ⚡ Este ritmo: -0.5kg/semana      │
+└─────────────────────────────────────┘
+```
+
+---
+
+## ⚠️ Considerações de Saúde
+
+| Situação | Ação do Sistema |
+|----------|-----------------|
+| Perda > 1kg/semana | ⚠️ Alerta: "Cuidado com perda rápida" |
+| Meta < IMC 18.5 | 🚫 Bloqueio: "Meta abaixo do saudável" |
+| Platô > 4 semanas | 💡 Sugestão: Ajustar estratégia |
+| Meta atingida | 🎉 Transição para modo manutenção |
+
+---
+
+## 📊 Métricas de Sucesso
+
+- **Engajamento**: Pesagens semanais > 80%
+- **Retenção**: Usuários com meta ativa > 60% após 30 dias
+- **Conversão**: Modo clínico → com meta de peso > 90%
+
+---
+
+## 🔄 Dependências
+
+| Item | Impacto |
+|------|---------|
+| nutritionCalculator.ts refatorado | ✅ Concluído |
+| Modo Clínico | ✅ Concluído |
+| Progress.tsx com WeightEntry | ✅ Existente |
+| Gamification system | ✅ Existente |
+
+---
+
+## Verificação
+
+### Testes
+- [ ] Fluxo de onboarding com meta de peso
+- [ ] Recálculo automático ao registrar peso
+- [ ] Projeção de data atualiza corretamente
+- [ ] Milestones disparam ao atingir marcos
+- [ ] Relatório médico inclui progresso
+
+### Validação
+- [ ] Limites de segurança (IMC mínimo)
+- [ ] Alertas de perda rápida funcionando
+- [ ] Modo manutenção após meta atingida

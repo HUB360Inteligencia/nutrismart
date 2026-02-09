@@ -14,7 +14,7 @@ interface ApiResponse {
   error?: string;
 }
 
-async function callGeminiApi(action: string, payload: Record<string, unknown>): Promise<string> {
+export async function callGeminiApi(action: string, payload: Record<string, unknown>): Promise<string> {
   const response = await fetch(API_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

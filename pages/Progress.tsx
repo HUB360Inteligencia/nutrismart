@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Area, AreaChart } from 'recharts';
-import { TrendingUp, TrendingDown, Minus, Plus, Calendar, Target, Flame, Activity, ChevronDown, Share2, Download, Loader2 } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Area, AreaChart, ReferenceLine } from 'recharts';
+import { TrendingUp, TrendingDown, Plus, Calendar, Target, Flame, Activity, ChevronDown, Share2, Download, Loader2, Trophy, Zap, Flag } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { getWeightHistory, addWeightEntry, calculateStreak, getWeeklyStats, getMeals } from '../services/databaseService';
 import { generateWeeklySummaryImage, shareImage, getWeekRange, isShareSupported } from '../services/shareService';
 import WeightModal from '../components/WeightModal';
+import { WeightGoal } from '../types';
 
 interface WeightEntry {
   day: string;
@@ -113,6 +114,45 @@ const Progress: React.FC = () => {
   const calorieGoal = profile?.dailyCalorieGoal || 2000;
   const isOnTrack = avgCalories <= calorieGoal + 100;
 
+  // Weight Goal calculations
+  const weightGoal: WeightGoal | undefined = (profile as any)?.weightGoal;
+
+  const { progressPercent, totalChange, totalToLose, isLosingWeight, remainingKg, weeklyVelocity } = useMemo(() => {
+    if (!weightGoal) {
+      return { progressPercent: 0, totalChange: 0, totalToLose: 0, isLosingWeight: true, remainingKg: 0, weeklyVelocity: 0 };
+    }
+
+    const goalStart = weightGoal.startWeight;
+    const goalTarget = weightGoal.targetWeight;
+    const losing = goalTarget < goalStart;
+    const total = Math.abs(goalStart - goalTarget);
+    const changed = losing
+      ? Math.max(0, goalStart - currentWeight)
+      : Math.max(0, currentWeight - goalStart);
+    const progress = total > 0 ? Math.min(100, Math.round((changed / total) * 100)) : 0;
+    const remaining = losing
+      ? Math.max(0, currentWeight - goalTarget)
+      : Math.max(0, goalTarget - currentWeight);
+
+    // Calculate weekly velocity from weight history
+    let velocity = 0;
+    if (weightHistory.length >= 2) {
+      const recentWeight = weightHistory[weightHistory.length - 1].weight;
+      const olderWeight = weightHistory[Math.max(0, weightHistory.length - 8)].weight; // ~1 week ago
+      const daysSpan = Math.min(7, weightHistory.length - 1);
+      velocity = daysSpan > 0 ? ((recentWeight - olderWeight) / daysSpan) * 7 : 0;
+    }
+
+    return {
+      progressPercent: progress,
+      totalChange: changed,
+      totalToLose: total,
+      isLosingWeight: losing,
+      remainingKg: remaining,
+      weeklyVelocity: velocity
+    };
+  }, [weightGoal, currentWeight, weightHistory]);
+
   const periodLabels: Record<PeriodFilter, string> = {
     7: '7 dias',
     14: '14 dias',
@@ -208,6 +248,109 @@ const Progress: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Weight Goal Hero Section */}
+      {weightGoal && weightGoal.status === 'active' && (
+        <div className="mb-8 bg-gradient-to-r from-nutri-500 via-nutri-600 to-teal-500 rounded-2xl p-6 text-white shadow-xl relative overflow-hidden">
+          {/* Background decoration */}
+          <div className="absolute top-0 right-0 w-48 h-48 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2" />
+          <div className="absolute bottom-0 left-0 w-32 h-32 bg-white/5 rounded-full translate-y-1/2 -translate-x-1/2" />
+
+          <div className="relative z-10">
+            <div className="flex items-center gap-2 mb-4">
+              <Trophy size={24} className="text-yellow-300" />
+              <h2 className="text-lg font-bold">Sua Meta de Peso</h2>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* Progress Circle */}
+              <div className="flex items-center gap-4">
+                <div className="relative w-20 h-20">
+                  <svg className="w-20 h-20 -rotate-90" viewBox="0 0 36 36">
+                    <path
+                      className="stroke-white/20"
+                      strokeWidth="3"
+                      fill="none"
+                      d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                    />
+                    <path
+                      className="stroke-yellow-300"
+                      strokeWidth="3"
+                      strokeLinecap="round"
+                      fill="none"
+                      strokeDasharray={`${progressPercent}, 100`}
+                      d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                    />
+                  </svg>
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <span className="text-xl font-bold">{progressPercent}%</span>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-white/80 text-sm">Progresso</p>
+                  <p className="text-2xl font-bold">
+                    {Math.abs(totalChange).toFixed(1)}kg
+                    <span className="text-sm font-normal text-white/70"> de {Math.abs(totalToLose).toFixed(1)}kg</span>
+                  </p>
+                </div>
+              </div>
+
+              {/* Current vs Target */}
+              <div className="flex items-center justify-center gap-4">
+                <div className="text-center">
+                  <p className="text-white/70 text-sm">Atual</p>
+                  <p className="text-2xl font-bold">{currentWeight.toFixed(1)}kg</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-0.5 bg-white/30" />
+                  {isLosingWeight ? (
+                    <TrendingDown size={24} className="text-green-300" />
+                  ) : (
+                    <TrendingUp size={24} className="text-green-300" />
+                  )}
+                  <div className="w-8 h-0.5 bg-white/30" />
+                </div>
+                <div className="text-center">
+                  <p className="text-white/70 text-sm">Meta</p>
+                  <p className="text-2xl font-bold">{weightGoal.targetWeight}kg</p>
+                </div>
+              </div>
+
+              {/* Projection */}
+              <div className="text-center md:text-right">
+                <div className="inline-flex items-center gap-2 bg-white/10 rounded-xl px-4 py-2 mb-2">
+                  <Flag size={16} />
+                  <span className="text-sm font-medium">Projeção</span>
+                </div>
+                <p className="text-xl font-bold">
+                  {weightGoal.estimatedDate
+                    ? new Date(weightGoal.estimatedDate).toLocaleDateString('pt-BR', { day: 'numeric', month: 'short', year: 'numeric' })
+                    : 'Calculando...'}
+                </p>
+                {remainingKg > 0 && (
+                  <p className="text-white/70 text-sm mt-1">
+                    Faltam {remainingKg.toFixed(1)}kg para sua meta
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Weekly Velocity */}
+            <div className="mt-4 pt-4 border-t border-white/20 flex items-center gap-4 text-sm">
+              <Zap size={16} className="text-yellow-300" />
+              <span className="text-white/80">Velocidade atual:</span>
+              <span className="font-bold">
+                {weeklyVelocity > 0 ? '+' : ''}{weeklyVelocity.toFixed(2)}kg/semana
+              </span>
+              {Math.abs(weeklyVelocity) > 1 && (
+                <span className="bg-amber-400/20 text-amber-200 px-2 py-0.5 rounded-full text-xs">
+                  ⚠️ Ritmo acelerado
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Stats Summary */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
@@ -321,6 +464,16 @@ const Progress: React.FC = () => {
                     }}
                     formatter={(value: number) => [`${value.toFixed(1)} kg`, 'Peso']}
                   />
+                  {/* Goal reference line */}
+                  {weightGoal && (
+                    <ReferenceLine
+                      y={weightGoal.targetWeight}
+                      stroke="#f59e0b"
+                      strokeDasharray="5 5"
+                      strokeWidth={2}
+                      label={{ value: 'Meta', fill: '#f59e0b', fontSize: 12, position: 'right' }}
+                    />
+                  )}
                   <Area
                     type="monotone"
                     dataKey="weight"
@@ -397,13 +550,12 @@ const Progress: React.FC = () => {
                     barSize={32}
                   />
                   {/* Goal line */}
-                  <Line
-                    type="monotone"
-                    dataKey="goal"
+                  <ReferenceLine
+                    y={calorieGoal}
                     stroke="#f59e0b"
                     strokeWidth={2}
                     strokeDasharray="5 5"
-                    dot={false}
+                    label={{ value: 'Meta', fill: '#f59e0b', fontSize: 12, position: 'right' }}
                   />
                 </BarChart>
               </ResponsiveContainer>

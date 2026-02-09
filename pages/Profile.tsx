@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { User, Save, Camera, Mail, LogOut, Calculator, Scale, Ruler, Calendar, Target, Activity, Droplets, Flame, RefreshCw, Sparkles, Pill, Syringe, Settings2, Check, X, ChevronRight } from 'lucide-react';
-import { User as UserType, ClinicalSettings, Meal, Symptom } from '../types';
+import { User, Save, Camera, Mail, LogOut, Calculator, Scale, Ruler, Calendar, Target, Activity, Droplets, Flame, RefreshCw, Sparkles, Pill, Syringe, Settings2, Check, X, ChevronRight, TrendingDown, TrendingUp, Trophy, Flag } from 'lucide-react';
+import { User as UserType, ClinicalSettings, Meal, Symptom, WeightGoal, WeightEntry } from '../types';
 import ClinicalSetup from '../components/ClinicalSetup';
 import MedicalReportGenerator from '../components/MedicalReportGenerator';
 import {
@@ -544,11 +544,123 @@ const Profile: React.FC<ProfileProps> = ({ user: initialUser, onUpdate, onSignOu
               </div>
             </div>
 
+            {/* My Weight Journey Section */}
+            {formData.weightGoal && formData.weightGoal.status === 'active' && (
+              <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-2xl shadow-sm border border-emerald-200 overflow-hidden">
+                <div className="p-6">
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-xl flex items-center justify-center shadow-sm">
+                      <Trophy className="w-6 h-6 text-white" />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-gray-900">Minha Jornada de Peso</h3>
+                      <p className="text-sm text-gray-500">Acompanhe seu progresso em direção à meta</p>
+                    </div>
+                  </div>
+
+                  {/* Progress Stats */}
+                  {(() => {
+                    const goal = formData.weightGoal!;
+                    const isLosing = goal.targetWeight < goal.startWeight;
+                    const totalToChange = Math.abs(goal.startWeight - goal.targetWeight);
+                    const currentChange = isLosing
+                      ? goal.startWeight - (formData.weight || goal.startWeight)
+                      : (formData.weight || goal.startWeight) - goal.startWeight;
+                    const progressPercent = totalToChange > 0
+                      ? Math.min(100, Math.round((currentChange / totalToChange) * 100))
+                      : 0;
+                    const remaining = Math.abs((formData.weight || goal.targetWeight) - goal.targetWeight);
+
+                    return (
+                      <>
+                        {/* Progress Bar */}
+                        <div className="mb-6">
+                          <div className="flex justify-between text-sm mb-2">
+                            <span className="font-medium text-gray-600">Progresso</span>
+                            <span className="font-bold text-emerald-600">{progressPercent}%</span>
+                          </div>
+                          <div className="h-4 bg-white rounded-full overflow-hidden shadow-inner">
+                            <div
+                              className="h-full bg-gradient-to-r from-emerald-400 to-teal-500 rounded-full transition-all duration-500"
+                              style={{ width: `${progressPercent}%` }}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Stats Grid */}
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                          <div className="bg-white/60 rounded-xl p-4 text-center">
+                            <p className="text-xs text-gray-500 mb-1">Início</p>
+                            <p className="text-lg font-bold text-gray-900">{goal.startWeight}kg</p>
+                          </div>
+                          <div className="bg-white/60 rounded-xl p-4 text-center">
+                            <p className="text-xs text-gray-500 mb-1">Atual</p>
+                            <p className="text-lg font-bold text-gray-900">{formData.weight || '—'}kg</p>
+                          </div>
+                          <div className="bg-white/60 rounded-xl p-4 text-center">
+                            <p className="text-xs text-gray-500 mb-1">Meta</p>
+                            <p className="text-lg font-bold text-emerald-600">{goal.targetWeight}kg</p>
+                          </div>
+                          <div className="bg-white/60 rounded-xl p-4 text-center">
+                            <p className="text-xs text-gray-500 mb-1">Variação</p>
+                            <div className="flex items-center justify-center gap-1">
+                              {currentChange > 0 && isLosing && <TrendingDown className="w-4 h-4 text-green-500" />}
+                              {currentChange > 0 && !isLosing && <TrendingUp className="w-4 h-4 text-green-500" />}
+                              <p className={`text-lg font-bold ${currentChange > 0 ? 'text-green-600' : 'text-gray-400'}`}>
+                                {currentChange > 0 ? (isLosing ? '-' : '+') : ''}{Math.abs(currentChange).toFixed(1)}kg
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Projection */}
+                        <div className="flex items-center justify-between bg-white/60 rounded-xl p-4">
+                          <div className="flex items-center gap-3">
+                            <Flag className="w-5 h-5 text-emerald-500" />
+                            <div>
+                              <p className="text-xs text-gray-500">Previsão de Conclusão</p>
+                              <p className="font-semibold text-gray-900">
+                                {goal.estimatedDate
+                                  ? new Date(goal.estimatedDate).toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' })
+                                  : 'Calculando...'}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-xs text-gray-500">Faltam</p>
+                            <p className="font-bold text-emerald-600">{remaining.toFixed(1)}kg</p>
+                          </div>
+                        </div>
+
+                        {/* Milestones Preview */}
+                        {goal.milestones && goal.milestones.length > 0 && (
+                          <div className="mt-4 pt-4 border-t border-emerald-200/50">
+                            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-3">Próximos Marcos</p>
+                            <div className="flex gap-2 flex-wrap">
+                              {goal.milestones.filter(m => !m.achievedAt).slice(0, 3).map((milestone, idx) => (
+                                <span
+                                  key={milestone.id || idx}
+                                  className="inline-flex items-center gap-1 px-3 py-1.5 bg-white rounded-full text-xs font-medium text-gray-600 border border-gray-200"
+                                >
+                                  🎯 {milestone.title}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
+                </div>
+              </div>
+            )}
+
             {/* Medical Report Generator - Inside form, same column */}
             <MedicalReportGenerator
               user={formData}
               meals={meals}
               symptoms={symptoms}
+              weightHistory={formData.weightHistory?.map(w => ({ date: w.date, weight: w.weight }))}
             />
 
             {/* Save Button */}

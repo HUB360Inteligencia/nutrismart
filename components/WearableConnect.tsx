@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Watch, Smartphone, Link2, Link2Off, RefreshCw, Activity, Footprints, Flame, Heart, Loader2, Check, AlertCircle } from 'lucide-react';
 import {
     WearablePlatform,
@@ -23,6 +23,11 @@ const WearableConnect: React.FC<WearableConnectProps> = ({ onDataSync }) => {
     const [error, setError] = useState<string>('');
 
     const platforms = getAvailablePlatforms();
+
+    // Compute if any device is connected
+    const isAnyConnected = useMemo(() => {
+        return Array.from(connections.values()).some((connection: WearableConnection | null | undefined) => connection?.connected);
+    }, [connections]);
 
     // Load connection statuses on mount
     useEffect(() => {
@@ -137,10 +142,10 @@ const WearableConnect: React.FC<WearableConnectProps> = ({ onDataSync }) => {
                             <div
                                 key={platform}
                                 className={`p-4 rounded-xl border transition-all ${isConnected
-                                        ? 'border-green-200 bg-green-50'
-                                        : isSupported
-                                            ? 'border-gray-200 hover:border-indigo-200 hover:bg-indigo-50/30'
-                                            : 'border-gray-100 bg-gray-50 opacity-60'
+                                    ? 'border-green-200 bg-green-50'
+                                    : isSupported
+                                        ? 'border-gray-200 hover:border-indigo-200 hover:bg-indigo-50/30'
+                                        : 'border-gray-100 bg-gray-50 opacity-60'
                                     }`}
                             >
                                 <div className="flex items-center justify-between">
@@ -178,8 +183,8 @@ const WearableConnect: React.FC<WearableConnectProps> = ({ onDataSync }) => {
                                                 onClick={() => handleConnect(platform)}
                                                 disabled={!isSupported}
                                                 className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${isSupported
-                                                        ? 'bg-indigo-500 text-white hover:bg-indigo-600'
-                                                        : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                                                    ? 'bg-indigo-500 text-white hover:bg-indigo-600'
+                                                    : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                                                     }`}
                                             >
                                                 <Link2 size={16} />
@@ -194,7 +199,7 @@ const WearableConnect: React.FC<WearableConnectProps> = ({ onDataSync }) => {
                 </div>
 
                 {/* Sync Button */}
-                {Array.from(connections.values()).some(c => c?.connected) && (
+                {isAnyConnected && (
                     <div className="mt-6">
                         <button
                             onClick={handleSync}

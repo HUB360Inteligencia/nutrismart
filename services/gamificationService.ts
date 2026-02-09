@@ -73,6 +73,14 @@ export const BADGE_DEFINITIONS: Omit<Badge, 'earnedAt'>[] = [
   { id: 'streak-100', name: 'Lendário', description: 'Manteve um streak de 100 dias', iconName: 'Gem', rarity: 'lendario', condition: 'Streak de 100 dias' },
   { id: 'level-25', name: 'Mestre Supremo', description: 'Alcançou o nível 25', iconName: 'Sparkles', rarity: 'lendario', condition: 'Nível 25' },
   { id: 'perfect-month', name: 'Mês Perfeito', description: 'Bateu todas as metas por 30 dias', iconName: 'Zap', rarity: 'lendario', condition: 'Todas as metas 30 dias seguidos' },
+
+  // Weight Goal Badges
+  { id: 'weight-first-kilo', name: 'Primeiro Quilinho', description: 'Perdeu seu primeiro quilograma', iconName: 'TrendingDown', rarity: 'comum', condition: 'Perder 1kg' },
+  { id: 'weight-5kg-club', name: 'Clube dos 5kg', description: 'Perdeu 5 quilogramas', iconName: 'Medal', rarity: 'raro', condition: 'Perder 5kg' },
+  { id: 'weight-10kg-warrior', name: 'Guerreiro 10kg', description: 'Perdeu 10 quilogramas', iconName: 'Shield', rarity: 'epico', condition: 'Perder 10kg' },
+  { id: 'weight-halfway', name: 'Metade do Caminho', description: 'Atingiu 50% da sua meta de peso', iconName: 'Target', rarity: 'raro', condition: '50% da meta de peso' },
+  { id: 'weight-goal-achieved', name: 'Meta Conquistada', description: 'Alcançou sua meta de peso', iconName: 'Trophy', rarity: 'lendario', condition: 'Meta de peso atingida' },
+  { id: 'weight-consistent', name: 'Peso Consistente', description: 'Registrou peso por 14 dias consecutivos', iconName: 'Calendar', rarity: 'raro', condition: '14 dias de registro de peso' },
 ];
 
 // ============================================
@@ -244,7 +252,7 @@ export function getUserBadges(): Badge[] {
 // Async version that syncs with Supabase
 export async function getUserBadgesAsync(userId?: string): Promise<Badge[]> {
   const uid = userId || currentUserId;
-  
+
   if (uid) {
     try {
       const dbBadges = await db.getUserBadges(uid);
@@ -255,7 +263,7 @@ export async function getUserBadgesAsync(userId?: string): Promise<Badge[]> {
           return def ? { ...def, earnedAt: b.earned_at } as Badge : null;
         })
         .filter((b): b is Badge => b !== null);
-      
+
       // Sync to localStorage
       localStorage.setItem(BADGES_KEY, JSON.stringify(badges));
       return badges;
@@ -263,7 +271,7 @@ export async function getUserBadgesAsync(userId?: string): Promise<Badge[]> {
       console.warn('Failed to fetch badges from Supabase:', error);
     }
   }
-  
+
   return getUserBadges();
 }
 
@@ -284,7 +292,7 @@ export function unlockBadge(badgeId: string): Badge | null {
 
   // Sync to Supabase in background
   if (currentUserId) {
-    db.unlockBadge(currentUserId, badgeId).catch(() => {});
+    db.unlockBadge(currentUserId, badgeId).catch(() => { });
   }
 
   // Add XP for unlocking (avoid infinite loop by not calling addXP for 'unlockBadge' action recursively)
@@ -420,4 +428,61 @@ export function checkStreakBadges(streak: number): void {
   if (streak >= 7) unlockBadge('streak-7');
   if (streak >= 30) unlockBadge('streak-30');
   if (streak >= 100) unlockBadge('streak-100');
+}
+
+// Check and unlock weight-related badges
+export interface WeightBadgeInput {
+  currentWeight: number;
+  startWeight: number;
+  targetWeight: number;
+  weightHistoryLength: number;
+  consecutiveWeighInDays?: number;
+}
+
+export function checkWeightBadges(input: WeightBadgeInput): Badge[] {
+  const unlockedBadges: Badge[] = [];
+
+  const isLosing = input.targetWeight < input.startWeight;
+  const weightLost = isLosing ? input.startWeight - input.currentWeight : 0;
+  const weightGained = !isLosing ? input.currentWeight - input.startWeight : 0;
+  const totalToChange = Math.abs(input.startWeight - input.targetWeight);
+  const progressPercent = totalToChange > 0 ? ((isLosing ? weightLost : weightGained) / totalToChange) * 100 : 0;
+
+  // First Kilo badge
+  if (weightLost >= 1 || weightGained >= 1) {
+    const badge = unlockBadge('weight-first-kilo');
+    if (badge) unlockedBadges.push(badge);
+  }
+
+  // 5kg Club badge
+  if (weightLost >= 5 || weightGained >= 5) {
+    const badge = unlockBadge('weight-5kg-club');
+    if (badge) unlockedBadges.push(badge);
+  }
+
+  // 10kg Warrior badge
+  if (weightLost >= 10 || weightGained >= 10) {
+    const badge = unlockBadge('weight-10kg-warrior');
+    if (badge) unlockedBadges.push(badge);
+  }
+
+  // Halfway badge
+  if (progressPercent >= 50) {
+    const badge = unlockBadge('weight-halfway');
+    if (badge) unlockedBadges.push(badge);
+  }
+
+  // Goal Achieved badge
+  if (progressPercent >= 100) {
+    const badge = unlockBadge('weight-goal-achieved');
+    if (badge) unlockedBadges.push(badge);
+  }
+
+  // Consistent weight tracking badge (14 days)
+  if (input.consecutiveWeighInDays && input.consecutiveWeighInDays >= 14) {
+    const badge = unlockBadge('weight-consistent');
+    if (badge) unlockedBadges.push(badge);
+  }
+
+  return unlockedBadges;
 }

@@ -36,6 +36,7 @@ export interface WeightMilestone {
   title: string;                 // "Metade do caminho!"
   achievedAt?: string;
   xpReward: number;
+  claimedXP?: boolean;
 }
 
 export interface WeightEntry {

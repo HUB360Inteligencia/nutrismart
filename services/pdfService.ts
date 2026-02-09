@@ -19,6 +19,12 @@ export interface ReportData {
     symptoms?: Symptom[];
     weightHistory?: { date: string; weight: number }[];
     aiSummary?: string;
+    weightGoal?: {
+        startWeight: number;
+        targetWeight: number;
+        startDate: string;
+        estimatedDate?: string;
+    };
 }
 
 export interface MacroAverages {
@@ -197,11 +203,52 @@ export async function generateMedicalReport(data: ReportData): Promise<Blob> {
 
     yPos = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 15;
 
-    // Weight History (if available)
+    // Weight History and Goal Progress (if available)
     if (data.weightHistory && data.weightHistory.length > 1) {
         addSection('Evolução do Peso');
 
-        const weightData = data.weightHistory.map(w => [w.date, `${w.weight} kg`]);
+        // Weight Goal Progress Summary
+        if (data.weightGoal) {
+            const goal = data.weightGoal;
+            const isLosing = goal.targetWeight < goal.startWeight;
+            const totalToChange = Math.abs(goal.startWeight - goal.targetWeight);
+            const currentChange = isLosing
+                ? goal.startWeight - data.user.weight
+                : data.user.weight - goal.startWeight;
+            const progressPercent = totalToChange > 0
+                ? Math.min(100, Math.round((currentChange / totalToChange) * 100))
+                : 0;
+            const remaining = Math.abs(data.user.weight - goal.targetWeight);
+
+            doc.setFont('helvetica', 'bold');
+            doc.text('Meta de Peso:', margin, yPos);
+            yPos += 6;
+            doc.setFont('helvetica', 'normal');
+
+            doc.text(`Peso Inicial: ${goal.startWeight} kg  |  Meta: ${goal.targetWeight} kg`, margin, yPos);
+            yPos += 5;
+            doc.text(`Peso Atual: ${data.user.weight} kg  |  Variação: ${currentChange >= 0 ? (isLosing ? '-' : '+') : ''}${Math.abs(currentChange).toFixed(1)} kg`, margin, yPos);
+            yPos += 5;
+            doc.text(`Progresso: ${progressPercent}%  |  Faltam: ${remaining.toFixed(1)} kg`, margin, yPos);
+            yPos += 5;
+
+            if (goal.estimatedDate) {
+                doc.text(`Previsão de Conclusão: ${new Date(goal.estimatedDate).toLocaleDateString('pt-BR')}`, margin, yPos);
+                yPos += 5;
+            }
+
+            yPos += 8;
+        }
+
+        // Weight History Table
+        doc.setFont('helvetica', 'bold');
+        doc.text('Histórico de Registros:', margin, yPos);
+        yPos += 6;
+
+        const weightData = data.weightHistory.slice(-10).map(w => [
+            new Date(w.date).toLocaleDateString('pt-BR'),
+            `${w.weight} kg`
+        ]);
 
         autoTable(doc, {
             startY: yPos,

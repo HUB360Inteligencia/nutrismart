@@ -24,7 +24,7 @@ const supabase = SUPABASE_URL && SUPABASE_ANON_KEY
     : null;
 
 interface GeminiRequest {
-    action: 'chat' | 'analyze-food' | 'calculate-nutrition' | 'generate-meal-plan' | 'generate-recipes' | 'generate-shopping-list' | 'generate-clinical-summary';
+    action: 'chat' | 'analyze-food' | 'calculate-nutrition' | 'generate-meal-plan' | 'generate-recipes' | 'generate-shopping-list' | 'generate-clinical-summary' | 'analyze-weight-progress';
     payload: Record<string, unknown>;
 }
 
@@ -547,6 +547,98 @@ Retorne apenas o texto do resumo, sem formatação especial.`;
     return callGemini(MODELS.LOGIC, prompt);
 }
 
+// Handler for weight progress analysis with AI insights
+async function handleAnalyzeWeightProgress(payload: Record<string, unknown>): Promise<string> {
+    const {
+        weightHistory,
+        weightGoal,
+        currentWeight,
+        weeklyChange,
+        isClinicalMode,
+        medication
+    } = payload as {
+        weightHistory: Array<{ date: string; weight: number }>;
+        weightGoal: { startWeight: number; targetWeight: number; startDate: string };
+        currentWeight: number;
+        weeklyChange: number;
+        isClinicalMode?: boolean;
+        medication?: string;
+    };
+
+    // Calculate progress percentage
+    const totalToLose = Math.abs(weightGoal.startWeight - weightGoal.targetWeight);
+    const lostSoFar = Math.abs(weightGoal.startWeight - currentWeight);
+    const progressPercent = Math.round((lostSoFar / totalToLose) * 100);
+    const remaining = Math.abs(currentWeight - weightGoal.targetWeight);
+    const isLosing = weightGoal.startWeight > weightGoal.targetWeight;
+
+    // Calculate days since start
+    const startDate = new Date(weightGoal.startDate);
+    const daysSinceStart = Math.floor((Date.now() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+    const weeksSinceStart = Math.floor(daysSinceStart / 7);
+
+    // Build weight trend summary
+    const recentEntries = (weightHistory || [])
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+        .slice(0, 7);
+
+    const weightTrend = recentEntries.map(e => `${e.date}: ${e.weight}kg`).join(', ');
+
+    const prompt = `Você é um nutricionista especializado em análise de progresso de peso.
+
+DADOS DO PACIENTE:
+- Peso Inicial: ${weightGoal.startWeight}kg
+- Peso Atual: ${currentWeight}kg
+- Meta: ${weightGoal.targetWeight}kg (${isLosing ? 'perda' : 'ganho'} de peso)
+- Progresso: ${progressPercent}% (${lostSoFar.toFixed(1)}kg ${isLosing ? 'perdidos' : 'ganhos'})
+- Restante: ${remaining.toFixed(1)}kg
+- Variação esta semana: ${weeklyChange > 0 ? '+' : ''}${weeklyChange.toFixed(1)}kg
+- Tempo de jornada: ${weeksSinceStart} semanas (${daysSinceStart} dias)
+- Últimos registros: ${weightTrend || 'Sem dados suficientes'}
+${isClinicalMode ? `- Modo clínico: Sim (${medication || 'GLP-1'})` : ''}
+
+TAREFA:
+Analise o progresso e forneça:
+1. Uma avaliação geral (2-3 frases, tom motivacional)
+2. Uma tendência identificada (ex: "ritmo consistente", "platô detectado", "acelerando")
+3. Uma dica prática específica para a próxima semana
+4. Uma previsão de quando atingirá a meta (baseado no ritmo atual)
+
+REGRAS:
+- Seja encorajador mas realista
+- Se progresso > 1kg/semana, alerte sobre perda muscular
+- Se platô (< 0.3kg em 2+ semanas), sugira estratégias
+- Para modo clínico, enfatize proteína e hidratação
+- Responda em formato JSON
+
+Retorne apenas um JSON puro com esta estrutura:
+{
+  "assessment": "string - avaliação geral motivacional",
+  "trend": "accelerating" | "consistent" | "slowing" | "plateau" | "fluctuating",
+  "trendLabel": "string - label em português para a tendência",
+  "tip": "string - dica prática específica",
+  "estimatedGoalDate": "string - data estimada no formato DD/MM/YYYY ou null se impossível calcular",
+  "weeklyRateAdvice": "safe" | "too_fast" | "too_slow",
+  "motivationalMessage": "string - frase curta de motivação"
+}`;
+
+    const schema = {
+        type: 'OBJECT',
+        properties: {
+            assessment: { type: 'STRING', description: 'Avaliação geral motivacional do progresso' },
+            trend: { type: 'STRING', description: 'Tendência identificada (accelerating, consistent, slowing, plateau, fluctuating)' },
+            trendLabel: { type: 'STRING', description: 'Label da tendência em português' },
+            tip: { type: 'STRING', description: 'Dica prática específica para a próxima semana' },
+            estimatedGoalDate: { type: 'STRING', description: 'Data estimada para atingir a meta' },
+            weeklyRateAdvice: { type: 'STRING', description: 'Avaliação da velocidade (safe, too_fast, too_slow)' },
+            motivationalMessage: { type: 'STRING', description: 'Frase curta de motivação' }
+        },
+        required: ['assessment', 'trend', 'trendLabel', 'tip', 'motivationalMessage']
+    };
+
+    return callGemini(MODELS.LOGIC, prompt, undefined, schema);
+}
+
 // Main API endpoint
 app.post('/api/gemini', async (req, res) => {
     if (!GEMINI_API_KEY) {
@@ -581,6 +673,9 @@ app.post('/api/gemini', async (req, res) => {
                 break;
             case 'generate-clinical-summary':
                 result = await handleGenerateClinicalSummary(payload);
+                break;
+            case 'analyze-weight-progress':
+                result = await handleAnalyzeWeightProgress(payload);
                 break;
             default:
                 return res.status(400).json({ error: 'Ação inválida' });

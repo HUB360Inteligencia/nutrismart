@@ -8,9 +8,12 @@ import {
   Utensils,
   ChevronRight,
   Check,
-  Loader2
+  Loader2,
+  AlertTriangle,
+  ArrowRight
 } from 'lucide-react';
-import { DailyStats, User, Meal, Exercise, NavItem, Challenge } from '../types';
+import { DailyStats, User, Meal, Exercise, NavItem, Challenge, WeightMilestone } from '../types';
+import { analyzeCalorieAdjustment, CalorieAdjustment, recalculateMacrosForAdjustment } from '../services/CalorieAdjustmentService';
 import CalorieHero from '../components/CalorieHero';
 import ConsistencyCard from '../components/ConsistencyCard';
 import ActionGrid from '../components/ActionGrid';
@@ -18,8 +21,11 @@ import ActivityStream from '../components/ActivityStream';
 import WeeklyChallenge from '../components/WeeklyChallenge';
 import MedicationTracker from '../components/MedicationTracker';
 import SymptomModal from '../components/SymptomModal';
-import { getWeeklyChallenge } from '../services/gamificationService';
-import { logSymptom, addWeightEntry } from '../services/databaseService';
+import WeightGoalCard from '../components/WeightGoalCard';
+import { getWeeklyChallenge, addXP, checkWeightBadges } from '../services/gamificationService';
+import { logSymptom, addWeightEntry, updateProfile } from '../services/databaseService';
+import WeightInsightsCard from '../components/WeightInsightsCard';
+import MilestoneModal from '../components/MilestoneModal';
 
 interface DashboardProps {
   user: User;
@@ -39,13 +45,107 @@ const Dashboard: React.FC<DashboardProps> = ({ user, userId, stats, updateWater,
   const [showSymptomModal, setShowSymptomModal] = useState(false);
   const [isSavingWeight, setIsSavingWeight] = useState(false);
   const [weightSaved, setWeightSaved] = useState(false);
+  const [activeMilestone, setActiveMilestone] = useState<WeightMilestone | null>(null);
+  const [calorieAdjustment, setCalorieAdjustment] = useState<CalorieAdjustment | null>(null);
+
+  useEffect(() => {
+    if (user.weightHistory && user.weightGoal && user.weightGoal.status === 'active') {
+      const adjustment = analyzeCalorieAdjustment(user, user.weightHistory);
+      // Only show if it's a significant adjustment or critical warning
+      if (adjustment.shouldAdjust) {
+        setCalorieAdjustment(adjustment);
+      } else {
+        setCalorieAdjustment(null);
+      }
+    }
+  }, [user.weight, user.weightHistory, user.weightGoal]);
+
+  const handleApplyAdjustment = async () => {
+    if (!calorieAdjustment) return;
+
+    const newMacros = recalculateMacrosForAdjustment(calorieAdjustment.suggestedGoal, user);
+
+    await updateProfile(userId, {
+      dailyCalorieGoal: calorieAdjustment.suggestedGoal,
+      macros: newMacros
+    });
+
+    setCalorieAdjustment(null);
+    window.location.reload();
+  };
 
   useEffect(() => {
     setChallenge(getWeeklyChallenge());
   }, []);
 
+  // Check for unclaimed milestones on mount/update
+  useEffect(() => {
+    if (user.weightGoal?.milestones) {
+      const unclaimed = user.weightGoal.milestones.find(m => m.achievedAt && !m.claimedXP);
+      if (unclaimed) {
+        setActiveMilestone(unclaimed);
+      }
+    }
+  }, [user.weightGoal]);
+
   const handleLogSymptom = async (symptom: string, severity: number, notes?: string) => {
     await logSymptom(userId, symptom, severity, notes);
+  };
+
+  const handleClaimXP = async (xp: number, milestoneId: string) => {
+    // Add XP locally and sync
+    addXP(xp, 'unlockBadge'); // Using unlockBadge action for milestone XP
+
+    // Update milestone as claimed in DB
+    if (user.weightGoal && user.weightGoal.milestones) {
+      const newMilestones = user.weightGoal.milestones.map(m =>
+        m.id === milestoneId ? { ...m, claimedXP: true } : m
+      );
+      const updatedGoal = { ...user.weightGoal, milestones: newMilestones };
+      await updateProfile(userId, { weightGoal: updatedGoal });
+    }
+
+    // Close modal and reload to reflect changes
+    setActiveMilestone(null);
+    window.location.reload();
+  };
+
+  const checkMilestones = async (currentWeight: number) => {
+    if (!user.weightGoal || !user.weightGoal.milestones) return;
+
+    // Check if goal is weight loss or gain
+    const isWeightLoss = user.weightGoal.startWeight > user.weightGoal.targetWeight;
+
+    const newMilestones = [...user.weightGoal.milestones];
+    let milestoneReached: WeightMilestone | null = null;
+    let updated = false;
+
+    for (const milestone of newMilestones) {
+      if (milestone.achievedAt) continue;
+
+      const reached = isWeightLoss
+        ? currentWeight <= milestone.targetWeight
+        : currentWeight >= milestone.targetWeight;
+
+      if (reached) {
+        milestone.achievedAt = new Date().toISOString();
+        milestone.claimedXP = false;
+        milestoneReached = milestone;
+        updated = true;
+        // Only trigger one milestone at a time for UX
+        break;
+      }
+    }
+
+    if (updated && milestoneReached) {
+      // Update goal in DB
+      const updatedGoal = { ...user.weightGoal, milestones: newMilestones };
+      await updateProfile(userId, { weightGoal: updatedGoal });
+      setActiveMilestone(milestoneReached);
+      return true; // Milestone reached
+    }
+
+    return false;
   };
 
   // Save weight directly with current date/time
@@ -59,13 +159,41 @@ const Dashboard: React.FC<DashboardProps> = ({ user, userId, stats, updateWater,
 
     if (success) {
       setWeightSaved(true);
-      // Show success feedback for 2 seconds
-      setTimeout(() => {
+
+      // Check weight badges based on progress
+      if (user.weightGoal && user.weightGoal.status === 'active') {
+        checkWeightBadges({
+          currentWeight: weightValue,
+          startWeight: user.weightGoal.startWeight,
+          targetWeight: user.weightGoal.targetWeight,
+          weightHistoryLength: user.weightHistory?.length || 0,
+          consecutiveWeighInDays: user.weightHistory ? Math.min(14, user.weightHistory.length) : 0
+        });
+      }
+
+      // Check milestones
+      const milestoneReached = await checkMilestones(weightValue);
+
+      if (!milestoneReached) {
+        // Only reload if no milestone modal is shown
+        // If modal is shown, reload will happen on modal close
+        setTimeout(() => {
+          setWeightSaved(false);
+          window.location.reload();
+        }, 1500);
+      } else {
         setWeightSaved(false);
-        window.location.reload();
-      }, 1500);
+      }
     }
     setIsSavingWeight(false);
+  };
+
+  const handleMilestoneClose = () => {
+    // If closed without claiming, it remains unclaimed and might pop up again
+    // Or we force claim on close? Better to let user claim explicitly?
+    // Let's reload anyway to refresh weight data
+    setActiveMilestone(null);
+    window.location.reload();
   };
 
   const currentDate = new Date().toLocaleDateString('pt-BR', {
@@ -105,6 +233,52 @@ const Dashboard: React.FC<DashboardProps> = ({ user, userId, stats, updateWater,
         </button>
       </div>
 
+      {/* Calorie Adjustment Alert */}
+      {calorieAdjustment && (
+        <div className={`p-6 rounded-2xl border ${calorieAdjustment.severity === 'warning'
+          ? 'bg-amber-50 border-amber-200 text-amber-900'
+          : calorieAdjustment.severity === 'success'
+            ? 'bg-green-50 border-green-200 text-green-900'
+            : 'bg-blue-50 border-blue-200 text-blue-900'
+          } relative z-10 animate-fade-in`}>
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex gap-4">
+              <div className={`p-3 rounded-xl h-fit ${calorieAdjustment.severity === 'warning' ? 'bg-amber-100 text-amber-600' :
+                calorieAdjustment.severity === 'success' ? 'bg-green-100 text-green-600' : 'bg-blue-100 text-blue-600'
+                }`}>
+                <AlertTriangle size={24} />
+              </div>
+              <div>
+                <h3 className="font-bold text-lg mb-1">Ajuste de Meta Sugerido</h3>
+                <p className="opacity-90 max-w-2xl">{calorieAdjustment.message}</p>
+                <div className="flex items-center gap-4 mt-2 text-sm font-medium opacity-75">
+                  <span>Meta Atual: {calorieAdjustment.previousGoal} kcal</span>
+                  <ArrowRight size={14} />
+                  <span className="font-bold">Nova Meta: {calorieAdjustment.suggestedGoal} kcal</span>
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setCalorieAdjustment(null)}
+                className="px-4 py-2 rounded-xl font-medium hover:bg-black/5 transition-colors"
+              >
+                Agora não
+              </button>
+              <button
+                onClick={handleApplyAdjustment}
+                className={`px-6 py-2 rounded-xl font-bold text-white shadow-lg transition-transform active:scale-95 flex items-center gap-2 ${calorieAdjustment.severity === 'warning' ? 'bg-amber-500 hover:bg-amber-600 shadow-amber-500/20' :
+                  calorieAdjustment.severity === 'success' ? 'bg-green-500 hover:bg-green-600 shadow-green-500/20' : 'bg-blue-500 hover:bg-blue-600 shadow-blue-500/20'
+                  }`}
+              >
+                Aplicar Ajuste
+                <Check size={16} />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Main Grid Layout */}
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 relative z-10">
 
@@ -137,6 +311,23 @@ const Dashboard: React.FC<DashboardProps> = ({ user, userId, stats, updateWater,
 
           {/* New Consistency Card - Top Priority */}
           <ConsistencyCard streak={streak} weeklyStats={weeklyStats} />
+
+          {/* Weight Goal Progress - Show if user has a weight goal */}
+          {user.weightGoal && user.weightGoal.status === 'active' && (
+            <>
+              <WeightGoalCard
+                weightGoal={user.weightGoal}
+                currentWeight={user.weight}
+                weightHistory={user.weightHistory}
+                compact={true}
+              />
+              <WeightInsightsCard
+                user={user}
+                weightHistory={user.weightHistory}
+                compact={true}
+              />
+            </>
+          )}
 
           {/* Clinical Mode - Medication Tracker */}
           {user.isClinicalMode && user.clinicalSettings && (
@@ -244,8 +435,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user, userId, stats, updateWater,
                   onClick={handleSaveWeight}
                   disabled={isSavingWeight || weightSaved}
                   className={`w-16 h-16 rounded-2xl flex items-center justify-center transition-all duration-300 shadow-xl active:scale-95 ${weightSaved
-                      ? 'bg-green-500 text-white shadow-green-500/20'
-                      : 'bg-gray-900 text-white hover:bg-black hover:scale-110 hover:rotate-90 shadow-gray-900/20'
+                    ? 'bg-green-500 text-white shadow-green-500/20'
+                    : 'bg-gray-900 text-white hover:bg-black hover:scale-110 hover:rotate-90 shadow-gray-900/20'
                     } disabled:opacity-70`}
                 >
                   {isSavingWeight ? (
@@ -300,6 +491,16 @@ const Dashboard: React.FC<DashboardProps> = ({ user, userId, stats, updateWater,
         onClose={() => setShowSymptomModal(false)}
         onSubmit={handleLogSymptom}
       />
+
+      {/* Milestone Modal */}
+      {activeMilestone && (
+        <MilestoneModal
+          milestone={activeMilestone}
+          currentWeight={parseFloat(weight) || user.weight || 0}
+          onClose={handleMilestoneClose}
+          onClaimXP={(xp) => handleClaimXP(xp, activeMilestone.id)}
+        />
+      )}
     </div>
   );
 };

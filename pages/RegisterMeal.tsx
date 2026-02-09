@@ -1,9 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Camera, Save, Plus, Loader2, Image as ImageIcon, X, PenTool, Scale, Calendar, Clock, Trash2, Calculator, History, Eye, Copy, Edit2, ChevronRight, ScanLine } from 'lucide-react';
+import { Camera, Save, Plus, Loader2, Image as ImageIcon, X, PenTool, Scale, Calendar, Clock, Trash2, Calculator, History, Eye, Copy, Edit2, ChevronRight, ScanLine, Sparkles } from 'lucide-react';
 import { Meal } from '../types';
 import { analyzeFoodImage, calculateNutritionalInfo } from '../services/geminiService';
 import BarcodeScanner from '../components/BarcodeScanner';
 import { BarcodeProduct, calculateNutritionForServing } from '../services/barcodeService';
+import { searchIngredients } from '../data/brazilianIngredients';
 
 interface RegisterMealProps {
   onSave: (meal: Omit<Meal, 'id'>) => Promise<void>;
@@ -50,6 +51,16 @@ const RegisterMeal: React.FC<RegisterMealProps> = ({ onSave, onUpdate, history =
 
   // Barcode Scanner state
   const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
+
+  // Autocomplete state for ingredient suggestions
+  const [ingredientSuggestions, setIngredientSuggestions] = useState<string[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1);
+  const ingredientInputRef = useRef<HTMLInputElement>(null);
+
+  // State for editing individual ingredients
+  const [editingIngredientId, setEditingIngredientId] = useState<string | null>(null);
+  const [editingIngredientData, setEditingIngredientData] = useState({ name: '', quantity: '', unit: 'g' });
 
   // Scroll to top when component mounts
   useEffect(() => {
@@ -252,10 +263,96 @@ const RegisterMeal: React.FC<RegisterMealProps> = ({ onSave, onUpdate, history =
     };
     setFoodItems([...foodItems, newItem]);
     setCurrentFood({ name: '', quantity: '', unit: 'g' });
+    // Reset autocomplete state
+    setShowSuggestions(false);
+    setIngredientSuggestions([]);
+    setSelectedSuggestionIndex(-1);
   };
 
   const removeFoodItem = (id: string) => {
     setFoodItems(foodItems.filter(item => item.id !== id));
+  };
+
+  // Functions for editing individual ingredients
+  const startEditingIngredient = (item: FoodItem) => {
+    setEditingIngredientId(item.id);
+    setEditingIngredientData({ name: item.name, quantity: item.quantity, unit: item.unit });
+  };
+
+  const saveIngredientEdit = () => {
+    if (!editingIngredientId || !editingIngredientData.name || !editingIngredientData.quantity) return;
+
+    setFoodItems(foodItems.map(item =>
+      item.id === editingIngredientId
+        ? { ...item, ...editingIngredientData }
+        : item
+    ));
+    setEditingIngredientId(null);
+    setEditingIngredientData({ name: '', quantity: '', unit: 'g' });
+  };
+
+  const cancelIngredientEdit = () => {
+    setEditingIngredientId(null);
+    setEditingIngredientData({ name: '', quantity: '', unit: 'g' });
+  };
+
+  // Autocomplete handlers
+  const handleIngredientInputChange = (value: string) => {
+    setCurrentFood({ ...currentFood, name: value });
+
+    if (value.length >= 2) {
+      const suggestions = searchIngredients(value, 8);
+      setIngredientSuggestions(suggestions);
+      setShowSuggestions(suggestions.length > 0);
+      setSelectedSuggestionIndex(-1);
+    } else {
+      setShowSuggestions(false);
+      setIngredientSuggestions([]);
+    }
+  };
+
+  const selectSuggestion = (suggestion: string) => {
+    setCurrentFood({ ...currentFood, name: suggestion });
+    setShowSuggestions(false);
+    setIngredientSuggestions([]);
+    setSelectedSuggestionIndex(-1);
+    // Focus on quantity field after selection
+    setTimeout(() => {
+      const quantityInput = document.querySelector('input[placeholder="100"]') as HTMLInputElement;
+      if (quantityInput) quantityInput.focus();
+    }, 50);
+  };
+
+  const handleIngredientKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!showSuggestions || ingredientSuggestions.length === 0) {
+      if (e.key === 'Enter') addFoodItem();
+      return;
+    }
+
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault();
+        setSelectedSuggestionIndex(prev =>
+          prev < ingredientSuggestions.length - 1 ? prev + 1 : prev
+        );
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        setSelectedSuggestionIndex(prev => prev > 0 ? prev - 1 : -1);
+        break;
+      case 'Enter':
+        e.preventDefault();
+        if (selectedSuggestionIndex >= 0) {
+          selectSuggestion(ingredientSuggestions[selectedSuggestionIndex]);
+        } else if (currentFood.name && currentFood.quantity) {
+          addFoodItem();
+        }
+        break;
+      case 'Escape':
+        setShowSuggestions(false);
+        setSelectedSuggestionIndex(-1);
+        break;
+    }
   };
 
   const calculateTotalNutrition = async () => {
@@ -435,14 +532,17 @@ const RegisterMeal: React.FC<RegisterMealProps> = ({ onSave, onUpdate, history =
     <div className="p-4 md:p-8 max-w-4xl mx-auto space-y-8">
 
       {/* Header and Input Selection */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 md:p-8">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 md:p-8">
+        <div className="flex justify-between items-center mb-5 md:mb-6">
+          <h1 className="text-xl md:text-2xl font-bold text-gray-900">
             {editingId ? 'Editar Refeição' : 'Registrar Refeição'}
           </h1>
           {inputMode === 'manual' && (
-            <button onClick={resetForm} className="text-sm text-gray-500 hover:text-red-500 flex items-center gap-1">
-              <X size={16} /> Cancelar
+            <button
+              onClick={resetForm}
+              className="min-h-[44px] px-3 text-sm text-gray-500 hover:text-red-500 active:text-red-600 flex items-center gap-1.5 rounded-lg hover:bg-gray-100 transition"
+            >
+              <X size={18} /> Cancelar
             </button>
           )}
         </div>
@@ -465,46 +565,53 @@ const RegisterMeal: React.FC<RegisterMealProps> = ({ onSave, onUpdate, history =
         />
 
         {inputMode === 'none' && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="space-y-3 md:space-y-4">
+            {/* Hero: Camera Button - Mobile full width, Desktop 50% */}
             <button
               onClick={() => cameraInputRef.current?.click()}
-              className="flex flex-col items-center justify-center gap-3 p-6 rounded-2xl border border-nutri-100 bg-nutri-50 text-nutri-700 hover:bg-nutri-100 hover:shadow-md transition group"
+              className="w-full flex items-center gap-4 p-4 md:p-5 min-h-[72px] rounded-xl bg-amber-gradient text-white hover:opacity-95 hover:shadow-xl hover:shadow-orange-200/50 active:scale-[0.98] transition-all duration-200 animate-fade-up group"
             >
-              <div className="w-14 h-14 bg-white rounded-full flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
-                <Camera size={28} className="text-nutri-600" />
+              <div className="w-14 h-14 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                <Camera size={28} className="text-white" />
               </div>
-              <span className="font-bold">Tirar Foto</span>
+              <div className="text-left">
+                <span className="font-bold text-lg block">Tirar Foto</span>
+                <span className="text-white/80 text-sm">Analisar refeição com IA</span>
+              </div>
             </button>
 
-            <button
-              onClick={() => galleryInputRef.current?.click()}
-              className="flex flex-col items-center justify-center gap-3 p-6 rounded-2xl border border-blue-100 bg-blue-50 text-blue-700 hover:bg-blue-100 hover:shadow-md transition group"
-            >
-              <div className="w-14 h-14 bg-white rounded-full flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
-                <ImageIcon size={28} className="text-blue-600" />
-              </div>
-              <span className="font-bold">Galeria</span>
-            </button>
+            {/* Secondary Actions - 2 columns on mobile, 3 on desktop */}
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              <button
+                onClick={() => galleryInputRef.current?.click()}
+                className="flex flex-col items-center justify-center gap-2 p-4 min-h-[80px] rounded-xl border-2 border-teal-100 bg-teal-50 text-teal-700 hover:bg-teal-100 hover:border-teal-200 hover:shadow-lg active:scale-[0.98] transition-all duration-200 animate-fade-up stagger-1 group"
+              >
+                <div className="w-11 h-11 bg-white rounded-lg flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
+                  <ImageIcon size={22} className="text-teal-600" />
+                </div>
+                <span className="font-semibold text-sm">Galeria</span>
+              </button>
 
-            <button
-              onClick={handleManualClick}
-              className="flex flex-col items-center justify-center gap-3 p-6 rounded-2xl border border-gray-200 bg-gray-50 text-gray-700 hover:bg-gray-100 hover:shadow-md transition group"
-            >
-              <div className="w-14 h-14 bg-white rounded-full flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
-                <PenTool size={28} className="text-gray-600" />
-              </div>
-              <span className="font-bold">Manual</span>
-            </button>
+              <button
+                onClick={handleManualClick}
+                className="flex flex-col items-center justify-center gap-2 p-4 min-h-[80px] rounded-xl border-2 border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100 hover:border-slate-300 hover:shadow-lg active:scale-[0.98] transition-all duration-200 animate-fade-up stagger-2 group"
+              >
+                <div className="w-11 h-11 bg-white rounded-lg flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
+                  <PenTool size={22} className="text-slate-600" />
+                </div>
+                <span className="font-semibold text-sm">Manual</span>
+              </button>
 
-            <button
-              onClick={() => setShowBarcodeScanner(true)}
-              className="flex flex-col items-center justify-center gap-3 p-6 rounded-2xl border border-orange-100 bg-orange-50 text-orange-700 hover:bg-orange-100 hover:shadow-md transition group"
-            >
-              <div className="w-14 h-14 bg-white rounded-full flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
-                <ScanLine size={28} className="text-orange-600" />
-              </div>
-              <span className="font-bold">Código de Barras</span>
-            </button>
+              <button
+                onClick={() => setShowBarcodeScanner(true)}
+                className="col-span-2 md:col-span-1 flex flex-col items-center justify-center gap-2 p-4 min-h-[56px] md:min-h-[80px] rounded-xl border-2 border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 hover:border-amber-300 hover:shadow-lg active:scale-[0.98] transition-all duration-200 animate-fade-up stagger-3 group"
+              >
+                <div className="w-11 h-11 bg-white rounded-lg flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
+                  <ScanLine size={22} className="text-amber-600" />
+                </div>
+                <span className="font-semibold text-sm">Código de Barras</span>
+              </button>
+            </div>
           </div>
         )}
 
@@ -543,23 +650,23 @@ const RegisterMeal: React.FC<RegisterMealProps> = ({ onSave, onUpdate, history =
                 )}
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Nome do Prato</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Nome do Prato</label>
                   <input
                     type="text"
                     value={mealData.name}
                     onChange={(e) => setMealData({ ...mealData, name: e.target.value })}
                     placeholder={isAnalyzing ? "Identificando..." : "Ex: Salada Caesar"}
-                    className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-nutri-500 focus:ring-2 focus:ring-nutri-100 outline-none transition bg-white"
+                    className="w-full px-4 py-3 text-base rounded-xl border-2 border-gray-200 focus:border-teal-400 focus:ring-2 focus:ring-teal-100 outline-none transition bg-white min-h-[48px]"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Tipo</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Tipo</label>
                   <select
                     value={mealData.type}
                     onChange={(e) => setMealData({ ...mealData, type: e.target.value as any })}
-                    className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-nutri-500 focus:ring-2 focus:ring-nutri-100 outline-none transition bg-white"
+                    className="w-full px-4 py-3 text-base rounded-xl border-2 border-gray-200 focus:border-teal-400 focus:ring-2 focus:ring-teal-100 outline-none transition bg-white min-h-[48px]"
                   >
                     <option value="breakfast">Café da Manhã</option>
                     <option value="lunch">Almoço</option>
@@ -568,25 +675,25 @@ const RegisterMeal: React.FC<RegisterMealProps> = ({ onSave, onUpdate, history =
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5 flex items-center gap-2">
                     <Calendar size={16} /> Data
                   </label>
                   <input
                     type="date"
                     value={manualDate}
                     onChange={(e) => setManualDate(e.target.value)}
-                    className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-nutri-500 focus:ring-2 focus:ring-nutri-100 outline-none transition bg-white"
+                    className="w-full px-4 py-3 text-base rounded-xl border-2 border-gray-200 focus:border-teal-400 focus:ring-2 focus:ring-teal-100 outline-none transition bg-white min-h-[48px]"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5 flex items-center gap-2">
                     <Clock size={16} /> Horário
                   </label>
                   <input
                     type="time"
                     value={manualTime}
                     onChange={(e) => setManualTime(e.target.value)}
-                    className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-nutri-500 focus:ring-2 focus:ring-nutri-100 outline-none transition bg-white"
+                    className="w-full px-4 py-3 text-base rounded-xl border-2 border-gray-200 focus:border-teal-400 focus:ring-2 focus:ring-teal-100 outline-none transition bg-white min-h-[48px]"
                   />
                 </div>
               </div>
@@ -609,16 +716,40 @@ const RegisterMeal: React.FC<RegisterMealProps> = ({ onSave, onUpdate, history =
 
               {/* Input Row */}
               <div className="grid grid-cols-1 md:grid-cols-12 gap-3 mb-4 items-end">
-                <div className="md:col-span-6">
+                <div className="md:col-span-6 relative">
                   <label className="block text-xs font-medium text-gray-500 mb-1">Nome</label>
                   <input
+                    ref={ingredientInputRef}
                     type="text"
                     value={currentFood.name}
-                    onChange={(e) => setCurrentFood({ ...currentFood, name: e.target.value })}
-                    placeholder="Adicionar ingrediente..."
-                    className="w-full px-3 py-2.5 rounded-lg border border-gray-200 focus:border-nutri-500 outline-none text-sm bg-white"
-                    onKeyDown={(e) => e.key === 'Enter' && addFoodItem()}
+                    onChange={(e) => handleIngredientInputChange(e.target.value)}
+                    placeholder="Digite o ingrediente..."
+                    className="w-full px-3 py-2.5 rounded-lg border border-gray-200 focus:border-nutri-500 focus:ring-2 focus:ring-nutri-100 outline-none text-sm bg-white"
+                    onKeyDown={handleIngredientKeyDown}
+                    onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+                    autoComplete="off"
                   />
+                  {/* Autocomplete Dropdown */}
+                  {showSuggestions && ingredientSuggestions.length > 0 && (
+                    <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                      {ingredientSuggestions.map((suggestion, index) => (
+                        <button
+                          key={suggestion}
+                          type="button"
+                          className={`w-full px-3 py-2.5 text-left text-sm transition flex items-center gap-2 ${index === selectedSuggestionIndex
+                            ? 'bg-nutri-50 text-nutri-700'
+                            : 'hover:bg-gray-50 text-gray-700'
+                            }`}
+                          onMouseDown={() => selectSuggestion(suggestion)}
+                        >
+                          <span className="w-6 h-6 rounded-full bg-gradient-to-br from-nutri-100 to-nutri-200 flex items-center justify-center text-xs font-medium text-nutri-700">
+                            {suggestion.charAt(0).toUpperCase()}
+                          </span>
+                          <span>{suggestion}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div className="md:col-span-3">
                   <label className="block text-xs font-medium text-gray-500 mb-1">Qtd</label>
@@ -665,36 +796,112 @@ const RegisterMeal: React.FC<RegisterMealProps> = ({ onSave, onUpdate, history =
                   </div>
                 ) : (
                   foodItems.map((item) => (
-                    <div key={item.id} className="flex items-center justify-between bg-white p-3 rounded-lg border border-gray-200 shadow-sm animate-fade-in">
-                      <div className="flex items-center gap-3">
-                        <div className="w-6 h-6 rounded-full bg-nutri-50 text-nutri-600 flex items-center justify-center text-[10px] font-bold">
-                          {item.name.charAt(0).toUpperCase()}
+                    <div key={item.id} className="bg-white rounded-lg border border-gray-200 shadow-sm animate-fade-in overflow-hidden">
+                      {editingIngredientId === item.id ? (
+                        // Editing Mode
+                        <div className="p-3 space-y-3">
+                          <div className="grid grid-cols-12 gap-2">
+                            <div className="col-span-12 md:col-span-6">
+                              <input
+                                type="text"
+                                value={editingIngredientData.name}
+                                onChange={(e) => setEditingIngredientData({ ...editingIngredientData, name: e.target.value })}
+                                placeholder="Nome do ingrediente"
+                                className="w-full px-3 py-2.5 text-base rounded-lg border-2 border-teal-300 focus:border-teal-500 outline-none bg-white min-h-[44px]"
+                                autoFocus
+                              />
+                            </div>
+                            <div className="col-span-6 md:col-span-3">
+                              <input
+                                type="number"
+                                value={editingIngredientData.quantity}
+                                onChange={(e) => setEditingIngredientData({ ...editingIngredientData, quantity: e.target.value })}
+                                placeholder="Qtd"
+                                className="w-full px-3 py-2.5 text-base rounded-lg border-2 border-gray-200 focus:border-teal-400 outline-none bg-white min-h-[44px]"
+                              />
+                            </div>
+                            <div className="col-span-6 md:col-span-3">
+                              <select
+                                value={editingIngredientData.unit}
+                                onChange={(e) => setEditingIngredientData({ ...editingIngredientData, unit: e.target.value })}
+                                className="w-full px-2 py-2.5 text-base rounded-lg border-2 border-gray-200 focus:border-teal-400 outline-none bg-white min-h-[44px]"
+                              >
+                                <option value="g">g</option>
+                                <option value="ml">ml</option>
+                                <option value="colher">colher</option>
+                                <option value="xicara">xícara</option>
+                                <option value="unidade">unid.</option>
+                                <option value="fatia">fatia</option>
+                              </select>
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={saveIngredientEdit}
+                              className="flex-1 py-2.5 bg-teal-500 text-white font-medium rounded-lg hover:bg-teal-600 active:scale-[0.98] transition flex items-center justify-center gap-1.5 min-h-[44px]"
+                            >
+                              <Save size={16} /> Salvar
+                            </button>
+                            <button
+                              type="button"
+                              onClick={cancelIngredientEdit}
+                              className="flex-1 py-2.5 bg-gray-100 text-gray-600 font-medium rounded-lg hover:bg-gray-200 active:scale-[0.98] transition flex items-center justify-center gap-1.5 min-h-[44px]"
+                            >
+                              <X size={16} /> Cancelar
+                            </button>
+                          </div>
                         </div>
-                        <div>
-                          <p className="font-medium text-gray-800 text-sm">{item.name}</p>
-                          <p className="text-xs text-gray-500">{item.quantity} {item.unit}</p>
+                      ) : (
+                        // Display Mode
+                        <div className="flex items-center justify-between p-3">
+                          <div className="flex items-center gap-3 flex-1 min-w-0">
+                            <div className="w-8 h-8 rounded-full bg-teal-50 text-teal-600 flex items-center justify-center text-xs font-bold flex-shrink-0">
+                              {item.name.charAt(0).toUpperCase()}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="font-medium text-gray-800 text-sm truncate">{item.name}</p>
+                              <p className="text-xs text-gray-500">{item.quantity} {item.unit}</p>
+                            </div>
+                          </div>
+                          <div className="flex gap-1 flex-shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => startEditingIngredient(item)}
+                              className="text-gray-400 hover:text-teal-600 hover:bg-teal-50 p-2.5 rounded-lg transition min-w-[44px] min-h-[44px] flex items-center justify-center"
+                              title="Editar ingrediente"
+                            >
+                              <Edit2 size={16} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => removeFoodItem(item.id)}
+                              className="text-gray-400 hover:text-red-500 hover:bg-red-50 p-2.5 rounded-lg transition min-w-[44px] min-h-[44px] flex items-center justify-center"
+                              title="Remover ingrediente"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
                         </div>
-                      </div>
-                      <button type="button" onClick={() => removeFoodItem(item.id)} className="text-gray-400 hover:text-red-500 p-2 transition">
-                        <Trash2 size={16} />
-                      </button>
+                      )}
                     </div>
                   ))
                 )}
               </div>
 
-              {/* Action: Estimate Calories */}
+              {/* Action: Calculate with AI */}
               {foodItems.length > 0 && !isAnalyzing && (
-                <div className="flex justify-end">
+                <div className="mt-4">
                   <button
                     type="button"
                     onClick={calculateTotalNutrition}
-                    className={`text-sm font-medium flex items-center gap-2 px-4 py-2 rounded-lg transition ${!mealData.calories || Number(mealData.calories) === 0
-                      ? 'bg-nutri-100 text-nutri-700 hover:bg-nutri-200 animate-pulse'
-                      : 'text-nutri-600 hover:bg-nutri-50'
+                    className={`w-full font-medium flex items-center justify-center gap-2 px-5 py-3 rounded-xl transition-all duration-300 ${!mealData.calories || Number(mealData.calories) === 0
+                      ? 'bg-gradient-to-r from-nutri-500 to-emerald-500 text-white shadow-lg shadow-nutri-500/30 hover:shadow-nutri-500/50 hover:scale-[1.02] animate-pulse'
+                      : 'bg-nutri-50 text-nutri-700 hover:bg-nutri-100 border border-nutri-200'
                       }`}
                   >
-                    <Calculator size={16} /> Recalcular Nutrientes
+                    <Sparkles size={18} className={!mealData.calories || Number(mealData.calories) === 0 ? 'animate-spin' : ''} />
+                    <span>{!mealData.calories || Number(mealData.calories) === 0 ? 'Calcular Nutrientes com IA' : 'Recalcular com IA'}</span>
                   </button>
                 </div>
               )}
@@ -748,13 +955,14 @@ const RegisterMeal: React.FC<RegisterMealProps> = ({ onSave, onUpdate, history =
               </div>
             </div>
 
-            <div className="flex gap-4 pt-4">
+            {/* Save Button - Sticky on mobile */}
+            <div className="sticky bottom-0 left-0 right-0 bg-white/95 backdrop-blur-sm pt-4 pb-2 -mx-6 px-6 md:relative md:mx-0 md:px-0 md:bg-transparent md:backdrop-blur-none border-t border-gray-100 md:border-0 mt-6 md:mt-4">
               <button
                 type="submit"
                 disabled={isAnalyzing}
-                className={`w-full text-white font-bold py-4 rounded-xl transition-all duration-300 flex items-center justify-center gap-2 ${isAnalyzing
+                className={`w-full text-white font-bold min-h-[56px] py-4 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 active:scale-[0.98] ${isAnalyzing
                   ? 'bg-gray-400 cursor-not-allowed'
-                  : 'bg-gradient-to-r from-nutri-500 to-nutri-600 hover:shadow-lg hover:shadow-nutri-200'
+                  : 'bg-amber-gradient hover:opacity-95 hover:shadow-xl hover:shadow-orange-200/50'
                   }`}
               >
                 <Save size={20} />
@@ -766,65 +974,85 @@ const RegisterMeal: React.FC<RegisterMealProps> = ({ onSave, onUpdate, history =
       </div>
 
       {/* History Section */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 md:p-8">
-        <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
-          <History size={24} className="text-nutri-500" />
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 md:p-8">
+        <h2 className="text-lg md:text-xl font-bold text-gray-900 mb-5 flex items-center gap-2">
+          <History size={22} className="text-teal-500" />
           Histórico de Refeições
         </h2>
 
         {history.length === 0 ? (
-          <div className="text-center py-8 text-gray-400">
-            <p>Nenhuma refeição registrada ainda.</p>
+          <div className="text-center py-12 text-gray-400">
+            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <History size={28} className="text-gray-300" />
+            </div>
+            <p className="font-medium">Nenhuma refeição registrada</p>
+            <p className="text-sm mt-1">Comece tirando uma foto ou adicionando manualmente</p>
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-3">
             {history.slice(0, 5).map((meal, index) => (
-              <div key={meal.id + index} className="flex flex-col md:flex-row md:items-center justify-between p-4 bg-gray-50 rounded-xl hover:bg-nutri-50/50 transition border border-gray-100 group">
-                <div className="flex items-start gap-4 mb-3 md:mb-0 cursor-pointer flex-1" onClick={() => setViewingMeal(meal)}>
-                  <div className="w-12 h-12 bg-white rounded-lg flex items-center justify-center text-2xl shadow-sm overflow-hidden flex-shrink-0">
+              <div
+                key={meal.id + index}
+                className={`relative flex flex-col p-4 rounded-xl border-2 transition-all duration-200 animate-fade-up cursor-pointer active:scale-[0.99] ${index === 0
+                  ? 'border-teal-200 bg-teal-50/50 hover:bg-teal-50'
+                  : 'border-gray-100 bg-gray-50/50 hover:bg-gray-100/50 hover:border-gray-200'
+                  }`}
+                style={{ animationDelay: `${index * 50}ms` }}
+                onClick={() => setViewingMeal(meal)}
+              >
+                {/* Badge for most recent */}
+                {index === 0 && (
+                  <span className="absolute -top-2 left-4 text-[10px] font-bold bg-teal-500 text-white px-2 py-0.5 rounded-full">
+                    MAIS RECENTE
+                  </span>
+                )}
+
+                <div className="flex items-center gap-3 min-h-[56px]">
+                  {/* Meal Image */}
+                  <div className="w-14 h-14 bg-white rounded-xl flex items-center justify-center text-2xl shadow-sm overflow-hidden flex-shrink-0 border border-gray-100">
                     {meal.image ? (
                       <img src={meal.image} alt={meal.name} className="w-full h-full object-cover" />
                     ) : (
                       meal.type === 'breakfast' ? '☕' : meal.type === 'lunch' ? '🥗' : meal.type === 'dinner' ? '🍲' : '🍎'
                     )}
                   </div>
-                  <div>
-                    <h3 className="font-bold text-gray-800">{meal.name}</h3>
+
+                  {/* Meal Info */}
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-bold text-gray-800 truncate">{meal.name}</h3>
                     <div className="flex flex-wrap gap-2 text-xs text-gray-500 mt-1">
                       <span className="flex items-center gap-1"><Clock size={12} /> {meal.time}</span>
-                      <span className="flex items-center gap-1"><Scale size={12} /> {meal.weight ? `${meal.weight}g` : 'N/A'}</span>
+                      {meal.weight && <span className="flex items-center gap-1"><Scale size={12} /> {meal.weight}g</span>}
                     </div>
+                  </div>
+
+                  {/* Calories */}
+                  <div className="text-right flex-shrink-0">
+                    <span className="block font-bold text-lg text-gray-900">{meal.calories}</span>
+                    <span className="text-xs text-gray-400">kcal</span>
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between md:justify-end gap-6 w-full md:w-auto pl-16 md:pl-0">
-                  <div className="text-right mr-4">
-                    <span className="block font-bold text-nutri-600">{meal.calories} kcal</span>
-                    <div className="flex gap-2 text-[10px] text-gray-400">
-                      <span className="text-blue-400">P: {meal.macros.protein}g</span>
-                      <span className="text-yellow-500">C: {meal.macros.carbs}g</span>
-                    </div>
+                {/* Macros Row */}
+                <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-100/50">
+                  <div className="flex gap-1.5 flex-1">
+                    <span className="text-xs font-medium px-2 py-1 rounded-md bg-blue-100 text-blue-700">P: {meal.macros.protein}g</span>
+                    <span className="text-xs font-medium px-2 py-1 rounded-md bg-amber-100 text-amber-700">C: {meal.macros.carbs}g</span>
+                    <span className="text-xs font-medium px-2 py-1 rounded-md bg-rose-100 text-rose-700">G: {meal.macros.fats}g</span>
                   </div>
 
-                  {/* Action Buttons */}
-                  <div className="flex gap-2">
+                  {/* Quick Actions */}
+                  <div className="flex gap-1">
                     <button
-                      onClick={() => setViewingMeal(meal)}
-                      className="p-2 rounded-lg text-gray-400 hover:text-nutri-600 hover:bg-white shadow-sm border border-transparent hover:border-gray-200 transition"
-                      title="Ver Detalhes"
-                    >
-                      <Eye size={18} />
-                    </button>
-                    <button
-                      onClick={() => loadMealIntoForm(meal, 'copy')}
-                      className="p-2 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-white shadow-sm border border-transparent hover:border-gray-200 transition"
-                      title="Duplicar / Copiar"
+                      onClick={(e) => { e.stopPropagation(); loadMealIntoForm(meal, 'copy'); }}
+                      className="p-2.5 rounded-lg text-gray-400 hover:text-teal-600 hover:bg-white active:bg-teal-50 transition"
+                      title="Duplicar"
                     >
                       <Copy size={18} />
                     </button>
                     <button
-                      onClick={() => loadMealIntoForm(meal, 'edit')}
-                      className="p-2 rounded-lg text-gray-400 hover:text-yellow-600 hover:bg-white shadow-sm border border-transparent hover:border-gray-200 transition"
+                      onClick={(e) => { e.stopPropagation(); loadMealIntoForm(meal, 'edit'); }}
+                      className="p-2.5 rounded-lg text-gray-400 hover:text-amber-600 hover:bg-white active:bg-amber-50 transition"
                       title="Editar"
                     >
                       <Edit2 size={18} />
