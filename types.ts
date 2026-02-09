@@ -1,3 +1,23 @@
+// Clinical Mode Types (GLP-1 Support)
+export interface ClinicalSettings {
+  medication: string;
+  dosage: string;
+  injectionDay?: number; // 0=Dom, 1=Seg... 6=Sab (Optional, meaningful only for weekly intervals)
+  intervalDays?: number; // Days between doses (Default 7)
+  nextInjection?: string; // Calculated next date
+  startDate: string;
+  proteinGoalPerKg?: number;
+}
+
+export interface Symptom {
+  id: string;
+  date: string;
+  symptom: string;
+  severity: number; // 1-5
+  notes?: string;
+  createdAt?: string;
+}
+
 export interface User {
   name: string;
   email: string;
@@ -16,6 +36,9 @@ export interface User {
     carbs: number;
     fats: number;
   };
+  // Clinical Mode fields
+  isClinicalMode?: boolean;
+  clinicalSettings?: ClinicalSettings;
 }
 
 
@@ -107,6 +130,25 @@ export interface Badge {
   condition: string; // Description of how to earn
 }
 
+// Shopping List Types
+export interface ShoppingListItem {
+  id: string;
+  name: string;
+  quantity?: string;
+  checked: boolean;
+}
+
+export interface ShoppingListCategory {
+  category: string;
+  items: ShoppingListItem[];
+}
+
+export interface ShoppingList {
+  id: string;
+  createdAt: string;
+  categories: ShoppingListCategory[];
+}
+
 export enum NavItem {
   Dashboard = 'Dashboard',
   RegisterMeal = 'Registrar Refeição',
@@ -118,6 +160,7 @@ export enum NavItem {
   Assistant = 'Assistente IA',
   Awards = 'Conquistas',
   Notifications = 'Notificações',
+  ShoppingList = 'Lista de Compras',
   Plans = 'Planos e Assinatura',
   Profile = 'Meu Perfil'
 }

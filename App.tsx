@@ -12,6 +12,7 @@ import Progress from './pages/Progress';
 import Awards from './pages/Awards';
 import Notifications from './pages/Notifications';
 import Plans from './pages/Plans';
+import ShoppingListPage from './pages/ShoppingListPage';
 import Profile from './pages/Profile';
 import AuthPage from './pages/AuthPage';
 import Onboarding, { OnboardingData } from './pages/Onboarding';
@@ -21,6 +22,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { useToast } from './contexts/ToastContext';
 import { NavItem, User, DailyStats, Meal, Exercise } from './types';
 import { checkAchievements, addXP, XP_TABLE, updateChallengeProgress, initGamificationService, checkStreakBadges } from './services/gamificationService';
+import { initializeNotifications, scheduleClinicalNotifications } from './services/notificationService';
 import * as db from './services/databaseService';
 
 // Default user for fallback
@@ -64,7 +66,7 @@ const AppLayout: React.FC<{ children: React.ReactNode; currentPath: NavItem; onN
           </button>
         </div>
 
-        <main className="flex-1 relative overflow-hidden">
+        <main className="flex-1 relative overflow-y-auto">
           {/* Background Blobs for Pages */}
           <div className="absolute top-0 right-0 w-[40rem] h-[40rem] bg-nutri-50/50 rounded-full mix-blend-multiply filter blur-3xl opacity-40 pointer-events-none -translate-y-1/2 translate-x-1/2" />
           <div className="absolute bottom-0 left-0 w-[40rem] h-[40rem] bg-blue-50/50 rounded-full mix-blend-multiply filter blur-3xl opacity-40 pointer-events-none translate-y-1/3 -translate-x-1/3" />
@@ -164,6 +166,13 @@ const AppContent: React.FC = () => {
   useEffect(() => {
     if (profile) {
       setUser(profile);
+
+      // Initialize notifications
+      initializeNotifications(
+        (profile.isClinicalMode && profile.clinicalSettings)
+          ? profile.clinicalSettings
+          : undefined
+      );
     }
   }, [profile]);
 
@@ -319,6 +328,7 @@ const AppContent: React.FC = () => {
         return (
           <Dashboard
             user={user}
+            userId={authUser?.id || ''}
             stats={stats}
             updateWater={handleUpdateWater}
             recentMeals={meals.slice(0, 3)}
@@ -345,13 +355,35 @@ const AppContent: React.FC = () => {
       case NavItem.Awards:
         return <Awards unlockedIds={unlockedAchievements} />;
       case NavItem.Notifications:
-        return <Notifications />;
+        return (
+          <Notifications
+            isClinicalMode={user.isClinicalMode}
+            clinicalSettings={user.clinicalSettings}
+          />
+        );
+      case NavItem.ShoppingList:
+        return (
+          <ShoppingListPage
+            onBack={() => setActiveItem(NavItem.MealPlanner)}
+          />
+        );
       case NavItem.Plans:
         return <Plans />;
       case NavItem.Profile:
-        return <Profile user={user} onUpdate={handleUpdateUser} onSignOut={signOut} />;
+        return (
+          <Profile
+            user={user}
+            onUpdate={handleUpdateUser}
+            onSignOut={signOut}
+            onToggleClinicalMode={async (enabled) => {
+              if (!authUser) return;
+              await db.toggleClinicalMode(authUser.id, enabled);
+              await refreshProfile();
+            }}
+          />
+        );
       default:
-        return <Dashboard user={user} stats={stats} updateWater={handleUpdateWater} recentMeals={meals} recentExercises={exercises} onNavigate={setActiveItem} streak={streak} weeklyStats={weeklyStats} />;
+        return <Dashboard user={user} userId={authUser?.id || ''} stats={stats} updateWater={handleUpdateWater} recentMeals={meals} recentExercises={exercises} onNavigate={setActiveItem} streak={streak} weeklyStats={weeklyStats} />;
     }
   };
 
@@ -372,6 +404,8 @@ const AppContent: React.FC = () => {
       dailyCalorieGoal: data.dailyCalorieGoal,
       dailyWaterGoal: data.dailyWaterGoal,
       macros: data.macros,
+      isClinicalMode: data.isClinicalMode,
+      clinicalSettings: data.clinicalSettings,
     });
 
     if (success) {

@@ -11,8 +11,12 @@ import {
     CheckCircle,
     Sparkles,
     Droplet,
-    Flame
+    Flame,
+    Heart,
+    Pill
 } from 'lucide-react';
+import ClinicalSetup from '../components/ClinicalSetup';
+import { ClinicalSettings } from '../types';
 import {
     Gender,
     Goal,
@@ -42,11 +46,18 @@ export interface OnboardingData {
         carbs: number;
         fats: number;
     };
+    // Clinical mode fields (optional)
+    isClinicalMode?: boolean;
+    clinicalSettings?: ClinicalSettings;
 }
 
 const Onboarding: React.FC<OnboardingProps> = ({ userName, onComplete }) => {
-    const [step, setStep] = useState(1);
+    const [step, setStep] = useState(0); // Start at step 0 (objective selection)
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    // Clinical mode state
+    const [isClinicalMode, setIsClinicalMode] = useState(false);
+    const [clinicalSettings, setClinicalSettings] = useState<ClinicalSettings | undefined>(undefined);
 
     // Step 1 - Basic Info
     const [weight, setWeight] = useState<number>(70);
@@ -66,7 +77,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ userName, onComplete }) => {
     const [fats, setFats] = useState<number>(65);
     const [water, setWater] = useState<number>(2500);
 
-    // Recalculate goals when entering step 3
+    // Recalculate goals when entering step 3 (was step 3, now calculation step)
     useEffect(() => {
         if (step === 3 && weight > 0 && height > 0 && age > 0) {
             const goals = calculateNutritionalGoals(
@@ -76,22 +87,30 @@ const Onboarding: React.FC<OnboardingProps> = ({ userName, onComplete }) => {
             );
             // Ensure values are within reasonable bounds
             setCalories(Math.min(4000, Math.max(1200, goals.calories)));
-            setProtein(Math.min(300, Math.max(50, goals.protein)));
+            // If clinical mode, increase protein target
+            const proteinMultiplier = isClinicalMode ? 1.2 : 1.0;
+            setProtein(Math.min(300, Math.max(50, Math.round(goals.protein * proteinMultiplier))));
             setCarbs(Math.min(500, Math.max(50, goals.carbs)));
             setFats(Math.min(150, Math.max(20, goals.fats)));
             setWater(Math.min(5000, Math.max(1500, goals.water)));
         }
-    }, [step]);
+    }, [step, isClinicalMode]);
 
+
+    // Total steps depends on clinical mode
+    // Step 0 = Objective, Step 1 = Basic Info, Step 2 = Goals, Step 3 = Nutritional Plan
+    // Step 4 = Clinical Setup (only if isClinicalMode)
+    const totalSteps = isClinicalMode ? 5 : 4;
+    const finalStep = totalSteps - 1;
 
     const handleNext = () => {
-        if (step < 3) {
+        if (step < finalStep) {
             setStep(step + 1);
         }
     };
 
     const handleBack = () => {
-        if (step > 1) {
+        if (step > 0) {
             setStep(step - 1);
         }
     };
@@ -108,7 +127,9 @@ const Onboarding: React.FC<OnboardingProps> = ({ userName, onComplete }) => {
                 activityLevel,
                 dailyCalorieGoal: calories,
                 dailyWaterGoal: water,
-                macros: { protein, carbs, fats }
+                macros: { protein, carbs, fats },
+                isClinicalMode,
+                clinicalSettings,
             });
         } finally {
             setIsSubmitting(false);
@@ -117,29 +138,39 @@ const Onboarding: React.FC<OnboardingProps> = ({ userName, onComplete }) => {
 
     const isStep1Valid = weight > 0 && height > 0 && age > 0;
     const isStep2Valid = goal && activityLevel;
+    const isClinicalStepValid = !isClinicalMode || (isClinicalMode && clinicalSettings);
 
-    // Progress indicator component
-    const StepIndicator = () => (
-        <div className="flex items-center justify-center gap-3 mb-10">
-            {[1, 2, 3].map((s) => (
-                <div key={s} className="flex items-center">
-                    <div
-                        className={`w-12 h-12 rounded-2xl flex items-center justify-center font-heading font-bold text-lg transition-all duration-500 ${s < step
-                            ? 'bg-nutri-500 text-white shadow-lg shadow-nutri-500/30'
-                            : s === step
-                                ? 'bg-gray-900 text-white shadow-xl scale-110'
-                                : 'bg-white border border-gray-100 text-gray-300'
-                            }`}
-                    >
-                        {s < step ? <CheckCircle size={24} /> : s}
+    // Progress indicator component - shows steps 1-3 (or 1-4 for clinical)
+    // Step 0 is the objective selection and doesn't show in indicator
+    const visibleSteps = isClinicalMode ? [1, 2, 3, 4] : [1, 2, 3];
+    const StepIndicator = () => {
+        // Don't show indicator on step 0
+        if (step === 0) return null;
+
+        return (
+            <div className="flex items-center justify-center gap-3 mb-10">
+                {visibleSteps.map((s, idx) => (
+                    <div key={s} className="flex items-center">
+                        <div
+                            className={`w-12 h-12 rounded-2xl flex items-center justify-center font-heading font-bold text-lg transition-all duration-500 ${s < step
+                                ? 'bg-nutri-500 text-white shadow-lg shadow-nutri-500/30'
+                                : s === step
+                                    ? isClinicalMode && step === 4
+                                        ? 'bg-teal-600 text-white shadow-xl scale-110'
+                                        : 'bg-gray-900 text-white shadow-xl scale-110'
+                                    : 'bg-white border border-gray-100 text-gray-300'
+                                }`}
+                        >
+                            {s < step ? <CheckCircle size={24} /> : idx + 1}
+                        </div>
+                        {idx < visibleSteps.length - 1 && (
+                            <div className={`w-12 h-1 mx-3 rounded-full transition-all duration-500 ${s < step ? 'bg-nutri-500' : 'bg-gray-100'}`} />
+                        )}
                     </div>
-                    {s < 3 && (
-                        <div className={`w-12 h-1 mx-3 rounded-full transition-all duration-500 ${s < step ? 'bg-nutri-500' : 'bg-gray-100'}`} />
-                    )}
-                </div>
-            ))}
-        </div>
-    );
+                ))}
+            </div>
+        );
+    };
 
     return (
         <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center p-4 relative overflow-hidden">
@@ -163,6 +194,63 @@ const Onboarding: React.FC<OnboardingProps> = ({ userName, onComplete }) => {
 
                 {/* Main Card */}
                 <div className="bg-white rounded-[2.5rem] shadow-2xl shadow-gray-200/50 border border-white/50 backdrop-blur-sm overflow-hidden p-8 md:p-10 transition-all duration-500">
+
+                    {/* Step 0 - Objective Selection */}
+                    {step === 0 && (
+                        <div className="space-y-8 animate-fade-in">
+                            <div className="text-center mb-8">
+                                <h2 className="font-heading font-bold text-2xl text-gray-900">Qual é o seu objetivo?</h2>
+                                <p className="text-sm text-gray-400 mt-2">Escolha o que melhor descreve sua jornada</p>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {/* Lifestyle Option */}
+                                <button
+                                    onClick={() => {
+                                        setIsClinicalMode(false);
+                                        setClinicalSettings(undefined);
+                                        handleNext();
+                                    }}
+                                    className={`group p-6 rounded-3xl border-2 text-left transition-all hover:scale-[1.02] active:scale-[0.98] ${!isClinicalMode
+                                        ? 'border-nutri-500 bg-nutri-50'
+                                        : 'border-gray-100 bg-gray-50 hover:border-nutri-300'
+                                        }`}
+                                >
+                                    <div className="w-14 h-14 bg-gradient-to-br from-nutri-400 to-nutri-600 rounded-2xl flex items-center justify-center mb-4 shadow-lg shadow-nutri-500/30">
+                                        <Heart size={28} className="text-white" />
+                                    </div>
+                                    <h3 className="font-heading font-bold text-lg text-gray-900 mb-2">
+                                        Estilo de Vida Saudável
+                                    </h3>
+                                    <p className="text-sm text-gray-500 leading-relaxed">
+                                        Quero perder peso, ganhar massa ou manter minha saúde através de reeducação alimentar e exercícios.
+                                    </p>
+                                </button>
+
+                                {/* Clinical Treatment Option */}
+                                <button
+                                    onClick={() => {
+                                        setIsClinicalMode(true);
+                                        handleNext();
+                                    }}
+                                    className={`group p-6 rounded-3xl border-2 text-left transition-all hover:scale-[1.02] active:scale-[0.98] ${isClinicalMode
+                                        ? 'border-teal-500 bg-teal-50'
+                                        : 'border-gray-100 bg-gray-50 hover:border-teal-300'
+                                        }`}
+                                >
+                                    <div className="w-14 h-14 bg-gradient-to-br from-teal-400 to-teal-600 rounded-2xl flex items-center justify-center mb-4 shadow-lg shadow-teal-500/30">
+                                        <Pill size={28} className="text-white" />
+                                    </div>
+                                    <h3 className="font-heading font-bold text-lg text-gray-900 mb-2">
+                                        Acompanhamento Clínico
+                                    </h3>
+                                    <p className="text-sm text-gray-500 leading-relaxed">
+                                        Estou em tratamento médico (ex: Mounjaro, Ozempic, Wegovy) e preciso de recomendações personalizadas.
+                                    </p>
+                                </button>
+                            </div>
+                        </div>
+                    )}
 
                     {/* Step 1 - Basic Info */}
                     {step === 1 && (
@@ -236,8 +324,8 @@ const Onboarding: React.FC<OnboardingProps> = ({ userName, onComplete }) => {
                                                 key={g}
                                                 onClick={() => setGender(g)}
                                                 className={`flex-1 py-3 rounded-2xl text-sm font-bold transition-all ${gender === g
-                                                        ? 'bg-white text-nutri-600 shadow-sm border border-gray-100'
-                                                        : 'text-gray-400 hover:text-gray-600'
+                                                    ? 'bg-white text-nutri-600 shadow-sm border border-gray-100'
+                                                    : 'text-gray-400 hover:text-gray-600'
                                                     }`}
                                             >
                                                 {g === 'masculino' ? 'Masculino' : 'Feminino'}
@@ -270,8 +358,8 @@ const Onboarding: React.FC<OnboardingProps> = ({ userName, onComplete }) => {
                                                 key={g}
                                                 onClick={() => setGoal(g)}
                                                 className={`p-4 rounded-3xl border-2 text-sm font-bold transition-all text-center flex flex-col items-center gap-2 ${goal === g
-                                                        ? 'border-nutri-500 bg-nutri-50 text-nutri-700'
-                                                        : 'border-gray-100 bg-gray-50 text-gray-500 hover:border-gray-300'
+                                                    ? 'border-nutri-500 bg-nutri-50 text-nutri-700'
+                                                    : 'border-gray-100 bg-gray-50 text-gray-500 hover:border-gray-300'
                                                     }`}
                                             >
                                                 {g === 'perder_peso' && <Scale className="mb-1" />}
@@ -296,8 +384,8 @@ const Onboarding: React.FC<OnboardingProps> = ({ userName, onComplete }) => {
                                                     key={level}
                                                     onClick={() => setAggressiveness(level)}
                                                     className={`flex-1 py-3 rounded-2xl text-xs sm:text-sm font-bold transition-all ${aggressiveness === level
-                                                            ? 'bg-white text-gray-900 shadow-sm ring-1 ring-black/5'
-                                                            : 'text-gray-400 hover:text-gray-600'
+                                                        ? 'bg-white text-gray-900 shadow-sm ring-1 ring-black/5'
+                                                        : 'text-gray-400 hover:text-gray-600'
                                                         }`}
                                                 >
                                                     {level.charAt(0).toUpperCase() + level.slice(1)}
@@ -334,13 +422,35 @@ const Onboarding: React.FC<OnboardingProps> = ({ userName, onComplete }) => {
                         <div className="space-y-8 animate-slide-in-right">
                             <div className="text-center mb-6">
                                 <h2 className="font-heading font-bold text-2xl text-gray-900">Seu Plano</h2>
-                                <p className="text-sm text-gray-400">Calculamos essas metas para você</p>
+                                <p className="text-sm text-gray-500 max-w-lg mx-auto leading-relaxed">
+                                    Calculamos estas metas com base no seu perfil, mas você está no controle.
+                                    <br />
+                                    Sinta-se à vontade para ajustar qualquer valor manualmente a qualquer momento.
+                                </p>
                             </div>
 
-                            <div className="bg-nutri-50 rounded-[2rem] p-8 text-center border border-nutri-100">
+                            <div className="bg-nutri-50 rounded-[2rem] p-6 text-center border border-nutri-100">
                                 <p className="text-nutri-600 text-xs font-bold uppercase tracking-widest mb-2">META DIÁRIA</p>
-                                <h3 className="font-heading font-extrabold text-6xl text-nutri-600 mb-2">{calories}</h3>
-                                <p className="text-nutri-400 font-medium">kcal</p>
+                                <div className="flex flex-col items-center justify-center gap-4">
+                                    <div className="relative">
+                                        <input
+                                            type="number"
+                                            value={calories}
+                                            onChange={(e) => setCalories(Number(e.target.value))}
+                                            className="font-heading font-extrabold text-5xl text-nutri-600 bg-transparent text-center focus:outline-none focus:border-b-2 focus:border-nutri-300 w-48"
+                                        />
+                                        <span className="text-nutri-400 font-medium absolute top-1/2 -translate-y-1/2 right-0 translate-x-full ml-2">kcal</span>
+                                    </div>
+                                    <input
+                                        type="range"
+                                        min="1200"
+                                        max="4000"
+                                        step="50"
+                                        value={calories}
+                                        onChange={(e) => setCalories(Number(e.target.value))}
+                                        className="w-48 accent-nutri-500 h-2 bg-nutri-200 rounded-lg appearance-none cursor-pointer"
+                                    />
+                                </div>
                             </div>
 
                             <div className="space-y-6">
@@ -386,46 +496,96 @@ const Onboarding: React.FC<OnboardingProps> = ({ userName, onComplete }) => {
                         </div>
                     )}
 
+                    {/* Step 4 - Clinical Setup (only for clinical mode) */}
+                    {step === 4 && isClinicalMode && (
+                        <ClinicalSetup
+                            onComplete={(settings) => {
+                                setClinicalSettings(settings);
+                            }}
+                            initialSettings={clinicalSettings}
+                        />
+                    )}
+
                     {/* Navigation Buttons */}
-                    <div className="flex justify-between mt-10 pt-6 border-t border-gray-100">
-                        <button
-                            onClick={handleBack}
-                            className={`flex items-center gap-2 px-6 py-4 text-gray-500 hover:bg-gray-50 rounded-2xl transition font-bold ${step === 1 ? 'opacity-0 pointer-events-none' : ''}`}
-                        >
-                            <ChevronLeft size={20} />
-                            Voltar
-                        </button>
-
-
-                        {step < 3 ? (
+                    {step !== 0 && (
+                        <div className="flex justify-between mt-10 pt-6 border-t border-gray-100">
                             <button
-                                onClick={handleNext}
-                                disabled={step === 1 ? !isStep1Valid : !isStep2Valid}
-                                className="flex items-center gap-3 px-8 py-4 bg-gray-900 hover:bg-black disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed text-white rounded-[1.25rem] transition-all font-bold shadow-lg shadow-gray-200 hover:scale-105 active:scale-95"
+                                onClick={handleBack}
+                                className={`flex items-center gap-2 px-6 py-4 text-gray-500 hover:bg-gray-50 rounded-2xl transition font-bold ${step <= 1 ? 'opacity-0 pointer-events-none' : ''}`}
                             >
-                                Continuar
-                                <ChevronRight size={20} />
+                                <ChevronLeft size={20} />
+                                Voltar
                             </button>
-                        ) : (
-                            <button
-                                onClick={handleComplete}
-                                disabled={isSubmitting}
-                                className="flex items-center gap-3 px-8 py-4 bg-nutri-500 hover:bg-nutri-600 disabled:bg-nutri-300 text-white rounded-[1.25rem] transition-all font-bold shadow-lg shadow-nutri-500/30 hover:shadow-nutri-500/50 hover:scale-105 active:scale-95"
-                            >
-                                {isSubmitting ? (
-                                    <>
-                                        <Sparkles size={20} className="animate-spin" />
-                                        Criando Perfil...
-                                    </>
-                                ) : (
-                                    <>
-                                        <CheckCircle size={20} />
-                                        Finalizar Setup
-                                    </>
-                                )}
-                            </button>
-                        )}
-                    </div>
+
+                            {/* Continue Button - Show if not final step AND not the step where we show 'Configure Treatment' */}
+                            {step < finalStep && !(step === 4 && isClinicalMode) && !(step === 3 && isClinicalMode) && (
+                                <button
+                                    onClick={handleNext}
+                                    disabled={
+                                        (step === 1 && !isStep1Valid) ||
+                                        (step === 2 && !isStep2Valid)
+                                    }
+                                    className="flex items-center gap-3 px-8 py-4 bg-gray-900 hover:bg-black disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed text-white rounded-[1.25rem] transition-all font-bold shadow-lg shadow-gray-200 hover:scale-105 active:scale-95"
+                                >
+                                    Continuar
+                                    <ChevronRight size={20} />
+                                </button>
+                            )}
+
+                            {/* Finish Button - Non-clinical mode (step 3) */}
+                            {step === 3 && !isClinicalMode && (
+                                <button
+                                    onClick={handleComplete}
+                                    disabled={isSubmitting}
+                                    className="flex items-center gap-3 px-8 py-4 bg-nutri-500 hover:bg-nutri-600 disabled:bg-nutri-300 text-white rounded-[1.25rem] transition-all font-bold shadow-lg shadow-nutri-500/30 hover:shadow-nutri-500/50 hover:scale-105 active:scale-95"
+                                >
+                                    {isSubmitting ? (
+                                        <>
+                                            <Sparkles size={20} className="animate-spin" />
+                                            Criando Perfil...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <CheckCircle size={20} />
+                                            Finalizar Setup
+                                        </>
+                                    )}
+                                </button>
+                            )}
+
+                            {/* Continue to Clinical Button - Clinical mode at step 3 */}
+                            {step === 3 && isClinicalMode && (
+                                <button
+                                    onClick={handleNext}
+                                    className="flex items-center gap-3 px-8 py-4 bg-teal-500 hover:bg-teal-600 text-white rounded-[1.25rem] transition-all font-bold shadow-lg shadow-teal-500/30 hover:scale-105 active:scale-95"
+                                >
+                                    Configurar Tratamento
+                                    <Pill size={20} />
+                                </button>
+                            )}
+
+                            {/* Finish Button - Clinical mode (step 4) */}
+                            {step === 4 && isClinicalMode && (
+                                <button
+                                    onClick={handleComplete}
+                                    disabled={isSubmitting || !clinicalSettings}
+                                    className="flex items-center gap-3 px-8 py-4 bg-teal-500 hover:bg-teal-600 disabled:bg-gray-200 disabled:text-gray-400 text-white rounded-[1.25rem] transition-all font-bold shadow-lg shadow-teal-500/30 hover:shadow-teal-500/50 hover:scale-105 active:scale-95"
+                                >
+                                    {isSubmitting ? (
+                                        <>
+                                            <Sparkles size={20} className="animate-spin" />
+                                            Criando Perfil...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <CheckCircle size={20} />
+                                            Concluir Configuração
+                                        </>
+                                    )}
+                                </button>
+                            )}
+                        </div>
+                    )}
                 </div>
             </div>
         </div>

@@ -13,9 +13,10 @@ const supabase = SUPABASE_URL && SUPABASE_ANON_KEY
     : null;
 
 interface GeminiRequest {
-    action: 'chat' | 'analyze-food' | 'calculate-nutrition' | 'generate-meal-plan' | 'generate-recipes';
+    action: 'chat' | 'analyze-food' | 'calculate-nutrition' | 'generate-meal-plan' | 'generate-recipes' | 'generate-shopping-list' | 'generate-clinical-summary';
     payload: Record<string, unknown>;
 }
+
 
 interface GeminiContent {
     parts: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }>;
@@ -149,7 +150,19 @@ async function handleChat(payload: Record<string, unknown>): Promise<string> {
         message: string;
         conversationHistory?: string;
         context?: {
-            user: { name: string; goal?: string; dailyCalorieGoal: number; dailyWaterGoal: number };
+            user: {
+                name: string;
+                goal?: string;
+                dailyCalorieGoal: number;
+                dailyWaterGoal: number;
+                isClinicalMode?: boolean;
+                clinicalSettings?: {
+                    medication: string;
+                    dosage: string;
+                    startDate: string;
+                    injectionDay: number;
+                };
+            };
             stats: { caloriesConsumed: number; waterConsumed: number; caloriesBurned: number };
             recentMeals: Array<{ name: string; calories: number }>;
         };
@@ -187,6 +200,20 @@ DADOS DO USUÁRIO (use para personalizar):
 - Água: ${stats.waterConsumed}ml de ${user.dailyWaterGoal}ml (${waterProgress}%)
 - Exercício queimado: ${stats.caloriesBurned} kcal
 - Refeições hoje: ${mealsSummary || 'Nenhuma ainda'}`;
+
+        if (user.isClinicalMode && user.clinicalSettings) {
+            systemInstruction += `
+             
+MODO CLÍNICO ATIVO (${user.clinicalSettings.medication}):
+- O usuário está em tratamento médico para perda de peso.
+- MEDICAÇÃO: ${user.clinicalSettings.medication} (${user.clinicalSettings.dosage}).
+- FOCO CRÍTICO: Priorize proteína em TODAS as refeições para evitar perda de massa magra.
+- HIDRATAÇÃO: Enfatize beber muita água para evitar efeitos colaterais.
+- EFEITOS COLATERAIS: Se o usuário relatar náusea/enjoo, sugira alimentos frios, secos, gengibre e comer devagar.
+- FRACIONAMENTO: Sugira refeições menores e mais frequentes se houver saciedade precoce.
+- EVITAR: Alimentos muito gordurosos ou muito doces que podem piorar o enjoo com a medicação.
+- Seja empática com possíveis dificuldades de adaptação ao medicamento.`;
+        }
     }
 
     if (conversationHistory) {
@@ -313,7 +340,13 @@ async function handleCalculateNutrition(payload: Record<string, unknown>): Promi
 // Handler for meal plan generation
 async function handleGenerateMealPlan(payload: Record<string, unknown>): Promise<string> {
     const { user, preferences, dayName } = payload as {
-        user: { dailyCalorieGoal: number; goal?: string; macros: { protein: number } };
+        user: {
+            dailyCalorieGoal: number;
+            goal?: string;
+            macros: { protein: number };
+            isClinicalMode?: boolean;
+            clinicalSettings?: { medication: string };
+        };
         preferences: {
             dietType: string;
             allergies: string[];
@@ -344,7 +377,7 @@ async function handleGenerateMealPlan(payload: Record<string, unknown>): Promise
         elaborate: 'receitas elaboradas (pode levar mais tempo)',
     };
 
-    const prompt = `Crie um plano alimentar para ${dayName} com as seguintes especificações:
+    let prompt = `Crie um plano alimentar para ${dayName} com as seguintes especificações:
     
 PERFIL DO USUÁRIO:
 - Meta calórica: ${user.dailyCalorieGoal} kcal/dia
@@ -360,6 +393,18 @@ PREFERÊNCIAS:
 Crie ${preferences.mealsPerDay} refeições: ${mealTypes.join(', ')}.
 Cada refeição deve ter ingredientes específicos com quantidades em gramas/ml e instruções de preparo.
 As calorias totais do dia devem somar aproximadamente ${user.dailyCalorieGoal} kcal.`;
+
+    if (user.isClinicalMode) {
+        prompt += `
+        
+ATENÇÃO - MODO CLÍNICO (${user?.clinicalSettings?.medication || 'Tratamento'}):
+Este plano deve ser adaptado para quem usa medicação para perda de peso (GLP-1).
+1. PRIORIDADE TOTAL EM PROTEÍNA: Garanta que a meta de proteína seja atingida ou superada para preservar massa magra.
+2. ALTA SACIEDADE COM POUCO VOLUME: Use alimentos densos em nutrientes, pois o apetite pode estar reduzido.
+3. INGESTÃO DE FIBRAS: Inclua fibras para auxiliar o intestino, mas evite excesso de gordura na mesma refeição.
+4. EVITAR NÁUSEAS: Evite refeições muito volumosas ou muito gordurosas.
+5. HIDRATAÇÃO: Sugira acompanhar com água (exceto durante a refeição se causar plenitude gástrica).`;
+    }
 
     const schema = {
         type: 'OBJECT',
@@ -436,6 +481,74 @@ Retorne um JSON.`;
     return callGemini(MODELS.LITE, prompt, undefined, schema);
 }
 
+// Handler for shopping list generation from ingredients
+async function handleGenerateShoppingList(payload: Record<string, unknown>): Promise<string> {
+    const { ingredients } = payload as { ingredients: string[] };
+
+    const prompt = `Você é um organizador de lista de compras. Receba a lista de ingredientes abaixo e agrupe-os por setor de supermercado.
+
+INGREDIENTES:
+${ingredients.map(i => `- ${i}`).join('\n')}
+
+Retorne um JSON válido agrupando os itens por categoria. Mantenha as quantidades originais quando disponíveis. Remova categorias vazias. Padronize nomes (ex: "2 bananas" em vez de "banana (2)"). Use português brasileiro.`;
+
+    const schema = {
+        type: 'OBJECT',
+        properties: {
+            'Hortifruti': { type: 'ARRAY', items: { type: 'STRING' } },
+            'Açougue': { type: 'ARRAY', items: { type: 'STRING' } },
+            'Laticínios': { type: 'ARRAY', items: { type: 'STRING' } },
+            'Mercearia': { type: 'ARRAY', items: { type: 'STRING' } },
+            'Bebidas': { type: 'ARRAY', items: { type: 'STRING' } },
+            'Congelados': { type: 'ARRAY', items: { type: 'STRING' } },
+            'Padaria': { type: 'ARRAY', items: { type: 'STRING' } },
+            'Outros': { type: 'ARRAY', items: { type: 'STRING' } }
+        }
+    };
+
+    return callGemini(MODELS.LITE, prompt, undefined, schema);
+}
+
+// Handler for clinical summary generation (PDF reports)
+async function handleGenerateClinicalSummary(payload: Record<string, unknown>): Promise<string> {
+    const { proteinAdherence, symptoms, medication, dosage, startDate } = payload as {
+        proteinAdherence: number;
+        symptoms: Array<{ symptom: string; date: string; severity: number }>;
+        medication?: string;
+        dosage?: string;
+        startDate?: string;
+    };
+
+    // Count symptom frequency
+    const symptomCounts = new Map<string, number>();
+    for (const s of symptoms) {
+        symptomCounts.set(s.symptom, (symptomCounts.get(s.symptom) || 0) + 1);
+    }
+    const symptomSummary = Array.from(symptomCounts.entries())
+        .sort((a, b) => b[1] - a[1])
+        .map(([symptom, count]) => `${symptom}: ${count}x`)
+        .join(', ');
+
+    const prompt = `Você é um relator médico especializado em acompanhamento de pacientes em uso de agonistas GLP-1 para perda de peso.
+
+DADOS DO PACIENTE:
+- Medicamento: ${medication || 'Não informado'}
+- Dosagem: ${dosage || 'Não informada'}
+- Início do tratamento: ${startDate || 'Não informado'}
+- Adesão à meta proteica: ${proteinAdherence}% dos dias
+- Sintomas registrados: ${symptomSummary || 'Nenhum sintoma registrado'}
+
+Com base nesses dados, gere um resumo clínico de 2-3 parágrafos para um endocrinologista ou nutrólogo. Seja objetivo e use linguagem técnica. Mencione:
+1. Avaliação geral da adesão alimentar
+2. Padrão dos efeitos colaterais (se houver)
+3. Recomendações para a próxima consulta
+
+Retorne apenas o texto do resumo, sem formatação especial.`;
+
+    return callGemini(MODELS.LOGIC, prompt);
+}
+
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
     // CORS headers
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -476,6 +589,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 break;
             case 'generate-recipes':
                 result = await handleGenerateRecipes(payload);
+                break;
+            case 'generate-shopping-list':
+                result = await handleGenerateShoppingList(payload);
+                break;
+            case 'generate-clinical-summary':
+                result = await handleGenerateClinicalSummary(payload);
                 break;
             default:
                 return res.status(400).json({ error: 'Ação inválida' });

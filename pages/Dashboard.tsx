@@ -14,10 +14,14 @@ import ConsistencyCard from '../components/ConsistencyCard';
 import ActionGrid from '../components/ActionGrid';
 import ActivityStream from '../components/ActivityStream';
 import WeeklyChallenge from '../components/WeeklyChallenge';
+import MedicationTracker from '../components/MedicationTracker';
+import SymptomModal from '../components/SymptomModal';
 import { getWeeklyChallenge } from '../services/gamificationService';
+import { logSymptom } from '../services/databaseService';
 
 interface DashboardProps {
   user: User;
+  userId: string;
   stats: DailyStats;
   updateWater: (amount: number) => void;
   recentMeals: Meal[];
@@ -27,13 +31,18 @@ interface DashboardProps {
   weeklyStats: { date: string; stats: DailyStats; achieved: boolean }[];
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ user, stats, updateWater, recentMeals, recentExercises, onNavigate, streak, weeklyStats }) => {
+const Dashboard: React.FC<DashboardProps> = ({ user, userId, stats, updateWater, recentMeals, recentExercises, onNavigate, streak, weeklyStats }) => {
   const [weight, setWeight] = useState<string>('');
   const [challenge, setChallenge] = useState<Challenge | null>(null);
+  const [showSymptomModal, setShowSymptomModal] = useState(false);
 
   useEffect(() => {
     setChallenge(getWeeklyChallenge());
   }, []);
+
+  const handleLogSymptom = async (symptom: string, severity: number, notes?: string) => {
+    await logSymptom(userId, symptom, severity, notes);
+  };
 
   const currentDate = new Date().toLocaleDateString('pt-BR', {
     weekday: 'long',
@@ -104,6 +113,14 @@ const Dashboard: React.FC<DashboardProps> = ({ user, stats, updateWater, recentM
 
           {/* New Consistency Card - Top Priority */}
           <ConsistencyCard streak={streak} weeklyStats={weeklyStats} />
+
+          {/* Clinical Mode - Medication Tracker */}
+          {user.isClinicalMode && user.clinicalSettings && (
+            <MedicationTracker
+              settings={user.clinicalSettings}
+              onLogSymptom={() => setShowSymptomModal(true)}
+            />
+          )}
 
           {/* Weekly Challenge Card */}
           <WeeklyChallenge challenge={challenge} />
@@ -186,7 +203,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, stats, updateWater, recentM
                     <input
                       type="number"
                       value={weight}
-                      placeholder={user.weight.toString()}
+                      placeholder={user.weight?.toString() || ''}
                       onChange={(e) => setWeight(e.target.value)}
                       className="w-full bg-gray-50 border-2 border-transparent group-hover/input:border-gray-200 focus:border-nutri-500 rounded-2xl py-4 px-6 font-heading font-black text-3xl text-gray-900 focus:outline-none focus:ring-4 focus:ring-nutri-500/10 transition-all placeholder:text-gray-300"
                     />
@@ -233,6 +250,13 @@ const Dashboard: React.FC<DashboardProps> = ({ user, stats, updateWater, recentM
 
         </div>
       </div>
+
+      {/* Symptom Modal for Clinical Mode */}
+      <SymptomModal
+        isOpen={showSymptomModal}
+        onClose={() => setShowSymptomModal(false)}
+        onSubmit={handleLogSymptom}
+      />
     </div>
   );
 };

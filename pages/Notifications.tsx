@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Bell, Droplet, Utensils, Dumbbell, Trophy, Clock, BellOff, BellRing, CheckCircle, Info } from 'lucide-react';
+import { Bell, Droplet, Utensils, Dumbbell, Trophy, Clock, BellOff, BellRing, CheckCircle, Info, Syringe } from 'lucide-react';
+import { ClinicalSettings } from '../types';
 import {
   NotificationSettings,
   getNotificationSettings,
@@ -8,30 +9,46 @@ import {
   getNotificationPermission,
   isNotificationSupported,
   initializeNotifications,
+  scheduleClinicalNotifications,
 } from '../services/notificationService';
 
-const Notifications: React.FC = () => {
+interface NotificationsProps {
+  isClinicalMode?: boolean;
+  clinicalSettings?: ClinicalSettings;
+}
+
+const Notifications: React.FC<NotificationsProps> = ({ isClinicalMode, clinicalSettings }) => {
   const [settings, setSettings] = useState<NotificationSettings>(getNotificationSettings());
   const [permission, setPermission] = useState<NotificationPermission>(getNotificationPermission());
   const [showSuccess, setShowSuccess] = useState(false);
 
   useEffect(() => {
     // Initialize notifications on mount
-    initializeNotifications();
-  }, []);
+    initializeNotifications(
+      isClinicalMode && clinicalSettings ? clinicalSettings : undefined
+    );
+  }, [isClinicalMode, clinicalSettings]);
 
   const handleRequestPermission = async () => {
     const result = await requestNotificationPermission();
     setPermission(result);
 
     if (result === 'granted') {
-      initializeNotifications();
+      initializeNotifications(
+        isClinicalMode && clinicalSettings ? clinicalSettings : undefined
+      );
     }
   };
 
   const updateSettings = (newSettings: NotificationSettings) => {
     setSettings(newSettings);
     saveNotificationSettings(newSettings);
+
+    // Reschedule clinical reminder if needed
+    if (isClinicalMode && clinicalSettings) {
+      scheduleClinicalNotifications(clinicalSettings);
+    }
+
     setShowSuccess(true);
     setTimeout(() => setShowSuccess(false), 2000);
   };
@@ -54,8 +71,8 @@ const Notifications: React.FC = () => {
       onChange={(e) => onChange(e.target.value)}
       disabled={disabled}
       className={`px-3 py-1.5 text-sm border rounded-lg transition-colors ${disabled
-          ? 'bg-gray-50 text-gray-400 border-gray-200'
-          : 'bg-white text-gray-700 border-gray-300 hover:border-nutri-400 focus:border-nutri-500 focus:ring-2 focus:ring-nutri-100'
+        ? 'bg-gray-50 text-gray-400 border-gray-200'
+        : 'bg-white text-gray-700 border-gray-300 hover:border-nutri-400 focus:border-nutri-500 focus:ring-2 focus:ring-nutri-100'
         }`}
     />
   );
@@ -263,6 +280,51 @@ const Notifications: React.FC = () => {
             </div>
           )}
         </div>
+
+        {/* Clinical Medication Reminder */}
+        {isClinicalMode && (
+          <div className="p-6 border-b border-gray-100">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-4">
+                <div className="w-10 h-10 bg-teal-50 text-teal-500 rounded-lg flex items-center justify-center">
+                  <Syringe size={20} />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-gray-900">Lembrete de Medicação</h3>
+                  <p className="text-sm text-gray-500">
+                    {clinicalSettings?.medication || 'Medicação'}
+                    {clinicalSettings && ` • ${['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'][clinicalSettings.injectionDay]}`}
+                  </p>
+                </div>
+              </div>
+              <Toggle
+                active={settings.clinical?.enabled ?? false}
+                onClick={() => updateSettings({
+                  ...settings,
+                  clinical: {
+                    enabled: !settings.clinical?.enabled,
+                    time: settings.clinical?.time || '09:00'
+                  }
+                })}
+                disabled={!isEnabled}
+              />
+            </div>
+
+            {settings.clinical?.enabled && isEnabled && (
+              <div className="ml-14 flex items-center gap-3">
+                <Clock size={16} className="text-gray-400" />
+                <span className="text-sm text-gray-600">Horário da aplicação</span>
+                <TimeInput
+                  value={settings.clinical?.time || '09:00'}
+                  onChange={(v) => updateSettings({
+                    ...settings,
+                    clinical: { ...settings.clinical!, time: v }
+                  })}
+                />
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Achievement Celebrations */}
         <div className="p-6">

@@ -54,7 +54,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeItem, onNavigate, isOpen, setIs
   };
 
   const displayName = profile?.name || profile?.email?.split('@')[0] || 'Usuário';
-  const avatarUrl = profile?.avatar_url;
+  const avatarUrl = profile?.avatarUrl;
   const userInitial = displayName.charAt(0).toUpperCase();
 
   return (

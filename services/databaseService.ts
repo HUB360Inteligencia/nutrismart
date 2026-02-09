@@ -1,5 +1,5 @@
 import { supabase } from './supabaseClient';
-import type { User, Meal, Exercise, DailyStats } from '../types';
+import type { User, Meal, Exercise, DailyStats, ClinicalSettings, Symptom } from '../types';
 
 // ============ PROFILE FUNCTIONS ============
 
@@ -33,6 +33,9 @@ export async function getProfile(userId: string): Promise<User | null> {
             carbs: data.macro_carbs,
             fats: data.macro_fats,
         },
+        // Clinical mode fields
+        isClinicalMode: data.is_clinical_mode || false,
+        clinicalSettings: data.clinical_settings || undefined,
     };
 }
 
@@ -87,26 +90,39 @@ export interface OnboardingData {
         carbs: number;
         fats: number;
     };
+    // Clinical mode fields (optional)
+    isClinicalMode?: boolean;
+    clinicalSettings?: ClinicalSettings;
 }
 
 export async function completeOnboarding(userId: string, data: OnboardingData): Promise<boolean> {
+    const updateData: Record<string, unknown> = {
+        weight: data.weight,
+        height: data.height,
+        age: data.age,
+        gender: data.gender,
+        goal: data.goal,
+        activity_level: data.activityLevel,
+        daily_calorie_goal: data.dailyCalorieGoal,
+        daily_water_goal: data.dailyWaterGoal,
+        macro_protein: data.macros.protein,
+        macro_carbs: data.macros.carbs,
+        macro_fats: data.macros.fats,
+        onboarding_completed: true,
+        updated_at: new Date().toISOString(),
+    };
+
+    // Add clinical mode fields if provided
+    if (data.isClinicalMode !== undefined) {
+        updateData.is_clinical_mode = data.isClinicalMode;
+    }
+    if (data.clinicalSettings) {
+        updateData.clinical_settings = data.clinicalSettings;
+    }
+
     const { error } = await supabase
         .from('profiles')
-        .update({
-            weight: data.weight,
-            height: data.height,
-            age: data.age,
-            gender: data.gender,
-            goal: data.goal,
-            activity_level: data.activityLevel,
-            daily_calorie_goal: data.dailyCalorieGoal,
-            daily_water_goal: data.dailyWaterGoal,
-            macro_protein: data.macros.protein,
-            macro_carbs: data.macros.carbs,
-            macro_fats: data.macros.fats,
-            onboarding_completed: true,
-            updated_at: new Date().toISOString(),
-        })
+        .update(updateData)
         .eq('id', userId);
 
     if (error) {
@@ -938,4 +954,136 @@ export async function clearChatHistory(userId: string): Promise<boolean> {
     }
 
     return true;
+}
+
+
+// ============ CLINICAL MODE FUNCTIONS ============
+
+export async function updateClinicalSettings(
+    userId: string,
+    settings: ClinicalSettings
+): Promise<boolean> {
+    const { error } = await supabase
+        .from('profiles')
+        .update({
+            clinical_settings: settings,
+            is_clinical_mode: true,
+            updated_at: new Date().toISOString(),
+        })
+        .eq('id', userId);
+
+    if (error) {
+        console.error('Error updating clinical settings:', error);
+        return false;
+    }
+
+    return true;
+}
+
+export async function getClinicalSettings(userId: string): Promise<ClinicalSettings | null> {
+    const { data, error } = await supabase
+        .from('profiles')
+        .select('clinical_settings, is_clinical_mode')
+        .eq('id', userId)
+        .single();
+
+    if (error || !data?.clinical_settings) {
+        return null;
+    }
+
+    return data.clinical_settings as ClinicalSettings;
+}
+
+export async function toggleClinicalMode(userId: string, enabled: boolean): Promise<boolean> {
+    const { error } = await supabase
+        .from('profiles')
+        .update({
+            is_clinical_mode: enabled,
+            updated_at: new Date().toISOString(),
+        })
+        .eq('id', userId);
+
+    if (error) {
+        console.error('Error toggling clinical mode:', error);
+        return false;
+    }
+
+    return true;
+}
+
+export async function logSymptom(
+    userId: string,
+    symptom: string,
+    severity: number,
+    notes?: string
+): Promise<boolean> {
+    const { error } = await supabase
+        .from('clinical_symptoms')
+        .insert({
+            user_id: userId,
+            symptom,
+            severity,
+            notes: notes || null,
+        });
+
+    if (error) {
+        console.error('Error logging symptom:', error);
+        return false;
+    }
+
+    return true;
+}
+
+export async function getRecentSymptoms(userId: string, days = 7): Promise<Symptom[]> {
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+
+    const { data, error } = await supabase
+        .from('clinical_symptoms')
+        .select('*')
+        .eq('user_id', userId)
+        .gte('date', startDate.toISOString().split('T')[0])
+        .order('created_at', { ascending: false });
+
+    if (error) {
+        console.error('Error fetching recent symptoms:', error);
+        return [];
+    }
+
+    return (data || []).map(s => ({
+        id: s.id,
+        date: s.date,
+        symptom: s.symptom,
+        severity: s.severity,
+        notes: s.notes,
+        createdAt: s.created_at,
+    }));
+}
+
+export async function getSymptomHistory(
+    userId: string,
+    startDate: string,
+    endDate: string
+): Promise<Symptom[]> {
+    const { data, error } = await supabase
+        .from('clinical_symptoms')
+        .select('*')
+        .eq('user_id', userId)
+        .gte('date', startDate)
+        .lte('date', endDate)
+        .order('date', { ascending: false });
+
+    if (error) {
+        console.error('Error fetching symptom history:', error);
+        return [];
+    }
+
+    return (data || []).map(s => ({
+        id: s.id,
+        date: s.date,
+        symptom: s.symptom,
+        severity: s.severity,
+        notes: s.notes,
+        createdAt: s.created_at,
+    }));
 }

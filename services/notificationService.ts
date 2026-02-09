@@ -1,3 +1,5 @@
+import { ClinicalSettings } from '../types';
+
 /**
  * Notification Service
  * Handles browser push notifications, scheduling, and celebration alerts
@@ -8,6 +10,7 @@ export interface NotificationSettings {
     meals: { enabled: boolean; times: string[] }; // Array of HH:MM times
     workout: { enabled: boolean; time: string }; // HH:MM time
     achievements: boolean;
+    clinical: { enabled: boolean; time: string }; // HH:MM time
 }
 
 export interface ScheduledNotification {
@@ -31,6 +34,7 @@ const DEFAULT_SETTINGS: NotificationSettings = {
     },
     workout: { enabled: false, time: '18:00' },
     achievements: true,
+    clinical: { enabled: true, time: '09:00' },
 };
 
 // Check if notifications are supported
@@ -174,6 +178,15 @@ export function sendWorkoutReminder(): void {
     );
 }
 
+// Medication reminder notification
+export function sendMedicationReminder(medicationName: string): void {
+    sendNotification(
+        '💊 Hora da Medicação',
+        `Lembrete para aplicar sua dose de ${medicationName}. Mantenha o foco!`,
+        { tag: 'medication-reminder', requireInteraction: true }
+    );
+}
+
 // Store for scheduled intervals
 const scheduledIntervals: Map<string, ReturnType<typeof setInterval>> = new Map();
 
@@ -217,6 +230,34 @@ export function scheduleNotifications(settings: NotificationSettings): void {
     }
 }
 
+// Schedule notifications based on settings
+export function scheduleClinicalNotifications(clinicalSettings: ClinicalSettings): void {
+    const settings = getNotificationSettings();
+
+    if (settings.clinical.enabled && clinicalSettings) {
+        const { intervalDays = 7, injectionDay, startDate } = clinicalSettings;
+
+        // Legacy/Weekly mode
+        if (intervalDays === 7 && injectionDay !== undefined) {
+            scheduleWeeklyReminder(
+                injectionDay,
+                settings.clinical.time,
+                () => sendMedicationReminder(clinicalSettings.medication),
+                'clinical-medication'
+            );
+        } else {
+            // Interval mode
+            scheduleIntervalReminder(
+                startDate,
+                intervalDays,
+                settings.clinical.time,
+                () => sendMedicationReminder(clinicalSettings.medication),
+                'clinical-medication'
+            );
+        }
+    }
+}
+
 // Schedule a notification at a specific time (HH:MM)
 function scheduleAtTime(time: string, callback: () => void, id: string): void {
     const [hours, minutes] = time.split(':').map(Number);
@@ -231,13 +272,59 @@ function scheduleAtTime(time: string, callback: () => void, id: string): void {
     scheduledIntervals.set(id, checkInterval);
 }
 
+// Schedule a notification at a specific day of week and time (HH:MM)
+function scheduleWeeklyReminder(dayOfWeek: number, time: string, callback: () => void, id: string): void {
+    const [hours, minutes] = time.split(':').map(Number);
+
+    const checkInterval = setInterval(() => {
+        const now = new Date();
+        // Check if it's the correct day (0-6) and time
+        if (now.getDay() === dayOfWeek && now.getHours() === hours && now.getMinutes() === minutes) {
+            callback();
+        }
+    }, 60000); // Check every minute
+
+    scheduledIntervals.set(id, checkInterval);
+}
+
+// Schedule notification based on interval from start date
+function scheduleIntervalReminder(startDate: string, intervalDays: number, time: string, callback: () => void, id: string): void {
+    const [hours, minutes] = time.split(':').map(Number);
+    const start = new Date(startDate + 'T00:00:00'); // Ensure local start check
+
+    const checkInterval = setInterval(() => {
+        const now = new Date();
+
+        // Check time match first
+        if (now.getHours() === hours && now.getMinutes() === minutes) {
+            // Check date match (diff days % interval === 0)
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
+            const diffTime = today.getTime() - start.getTime();
+            const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+            if (diffDays >= 0 && diffDays % intervalDays === 0) {
+                callback();
+            }
+        }
+    }, 60000); // Check every minute
+
+    scheduledIntervals.set(id, checkInterval);
+}
+
 // Initialize notification system
-export function initializeNotifications(): void {
+export function initializeNotifications(clinicalSettings?: ClinicalSettings): void {
     const settings = getNotificationSettings();
 
     // Only schedule if permission is granted
     if (getNotificationPermission() === 'granted') {
         scheduleNotifications(settings);
+    }
+
+    // Schedule clinical notifications if settings are provided
+    if (clinicalSettings) {
+        scheduleClinicalNotifications(clinicalSettings);
     }
 }
 
