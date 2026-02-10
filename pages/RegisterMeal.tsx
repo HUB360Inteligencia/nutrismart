@@ -3,7 +3,7 @@ import { Camera, Save, Plus, Loader2, Image as ImageIcon, X, PenTool, Scale, Cal
 import { Meal } from '../types';
 import { analyzeFoodImage, calculateNutritionalInfo } from '../services/geminiService';
 import { getLocalDateString } from '../utils/dateUtils';
-import { getMealsPaginated, deleteMeal as dbDeleteMeal } from '../services/databaseService';
+import { getMealsPaginated, deleteMeal as dbDeleteMeal } from '../services/mealService';
 import { useAuth } from '../contexts/AuthContext';
 import BarcodeScanner from '../components/BarcodeScanner';
 import { BarcodeProduct, calculateNutritionForServing } from '../services/barcodeService';
@@ -254,6 +254,9 @@ const RegisterMeal: React.FC<RegisterMealProps> = ({ onSave, onUpdate, onDelete 
 
       const { base64, mimeType } = await compressImage(file);
       console.log(`Converted to JPEG, final size: ${(base64.length / 1024 * 0.75).toFixed(0)}KB`);
+
+      const dataUrl = `data:${mimeType};base64,${base64}`;
+      setPreviewImage(dataUrl);
 
       try {
         const analysis = await analyzeFoodImage(base64, mimeType);
@@ -1143,7 +1146,18 @@ const RegisterMeal: React.FC<RegisterMealProps> = ({ onSave, onUpdate, onDelete 
                       <div className="flex items-center gap-3 min-h-[48px]">
                         <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center text-xl shadow-sm overflow-hidden flex-shrink-0 border border-gray-100">
                           {meal.image ? (
-                            <img src={meal.image} alt={meal.name} className="w-full h-full object-cover" />
+                            <img
+                              src={meal.image}
+                              alt={meal.name}
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                e.currentTarget.style.display = 'none';
+                                const parent = e.currentTarget.parentElement;
+                                if (parent) {
+                                  parent.innerText = meal.type === 'breakfast' ? '☕' : meal.type === 'lunch' ? '🥗' : meal.type === 'dinner' ? '🍲' : '🍎';
+                                }
+                              }}
+                            />
                           ) : (
                             meal.type === 'breakfast' ? '☕' : meal.type === 'lunch' ? '🥗' : meal.type === 'dinner' ? '🍲' : '🍎'
                           )}
@@ -1217,7 +1231,21 @@ const RegisterMeal: React.FC<RegisterMealProps> = ({ onSave, onUpdate, onDelete 
             {/* Modal Header & Image */}
             <div className="relative h-40 md:h-48 bg-gray-100 flex-shrink-0">
               {viewingMeal.image ? (
-                <img src={viewingMeal.image} alt={viewingMeal.name} className="w-full h-full object-cover" />
+                <img
+                  src={viewingMeal.image}
+                  alt={viewingMeal.name}
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none';
+                    const parent = e.currentTarget.parentElement;
+                    if (parent) {
+                      const fallback = document.createElement('div');
+                      fallback.className = 'w-full h-full flex items-center justify-center bg-gradient-to-br from-teal-50 to-emerald-100 text-teal-200';
+                      fallback.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>';
+                      parent.appendChild(fallback);
+                    }
+                  }}
+                />
               ) : (
                 <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-teal-50 to-emerald-100 text-teal-200">
                   <ImageIcon size={56} />

@@ -107,6 +107,17 @@ export type Database = {
         Insert: Omit<Database['public']['Tables']['weight_history']['Row'], 'id' | 'created_at'>;
         Update: Partial<Database['public']['Tables']['weight_history']['Insert']>;
       };
+      chat_history: {
+        Row: {
+          id: string;
+          user_id: string;
+          role: 'user' | 'assistant';
+          content: string;
+          created_at: string;
+        };
+        Insert: Omit<Database['public']['Tables']['chat_history']['Row'], 'id' | 'created_at'>;
+        Update: Partial<Database['public']['Tables']['chat_history']['Insert']>;
+      };
     };
   };
 };

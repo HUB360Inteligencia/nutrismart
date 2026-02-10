@@ -4,7 +4,11 @@
  */
 
 import { User, DailyStats, Meal } from '../types';
-import * as db from './databaseService';
+import { supabase } from './supabaseClient';
+import * as mealService from './mealService';
+import * as exerciseService from './exerciseService';
+import * as healthService from './healthService';
+import { calculateDailyStats } from './nutritionCalculator';
 
 // Chat message type
 export interface ChatMessage {
@@ -45,13 +49,22 @@ export async function getChatHistoryAsync(userId?: string): Promise<ChatMessage[
 
     if (uid) {
         try {
-            const dbMessages = await db.getChatHistory(uid, MAX_MESSAGES);
-            cachedMessages = dbMessages.map(msg => ({
+            const { data, error } = await supabase
+                .from('chat_history')
+                .select('*')
+                .eq('user_id', uid)
+                .order('created_at', { ascending: false })
+                .limit(MAX_MESSAGES);
+
+            if (error) throw error;
+
+            cachedMessages = data.map(msg => ({
                 id: msg.id,
-                role: msg.role,
+                role: msg.role as 'user' | 'assistant',
                 content: msg.content,
                 timestamp: new Date(msg.created_at),
-            }));
+            })).reverse(); // Supabase returns newest first due to order, we want chronological
+
             // Sync to localStorage for offline
             saveChatHistoryLocal(cachedMessages);
             return cachedMessages;
@@ -93,10 +106,22 @@ export async function addMessageAsync(
     // Save to Supabase in background
     if (uid) {
         try {
-            const saved = await db.addChatMessage(uid, message.role, message.content);
-            if (saved) {
+            const { data, error } = await supabase
+                .from('chat_history')
+                .insert({
+                    user_id: uid,
+                    role: message.role,
+                    content: message.content,
+                    created_at: timestamp.toISOString()
+                })
+                .select()
+                .single();
+
+            if (error) throw error;
+
+            if (data) {
                 // Update local message with server ID
-                localMessage.id = saved.id;
+                localMessage.id = data.id;
             }
         } catch (error) {
             console.warn('Failed to save to Supabase:', error);
@@ -125,7 +150,7 @@ export function addMessage(message: Omit<ChatMessage, 'id' | 'timestamp'>): Chat
 
     // Fire and forget Supabase save
     if (currentUserId) {
-        db.addChatMessage(currentUserId, message.role, message.content).catch(() => { });
+        addMessageAsync(message, currentUserId).catch(() => { });
     }
 
     return newMessage;
@@ -142,7 +167,10 @@ export async function clearChatHistoryAsync(userId?: string): Promise<void> {
     // Clear Supabase
     if (uid) {
         try {
-            await db.clearChatHistory(uid);
+            await supabase
+                .from('chat_history')
+                .delete()
+                .eq('user_id', uid);
         } catch (error) {
             console.warn('Failed to clear Supabase history:', error);
         }
@@ -156,7 +184,7 @@ export function clearChatHistory(): void {
 
     // Fire and forget Supabase clear
     if (currentUserId) {
-        db.clearChatHistory(currentUserId).catch(() => { });
+        clearChatHistoryAsync(currentUserId).catch(() => { });
     }
 }
 

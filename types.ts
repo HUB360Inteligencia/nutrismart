@@ -123,9 +123,11 @@ export interface Achievement {
   id: string;
   title: string;
   description: string;
-  iconName: string;
+  icon: string;
   unlocked: boolean;
   dateUnlocked?: string;
+  condition?: string;
+  xpReward?: number;
 }
 
 // Gamification - XP and Level System
@@ -155,7 +157,7 @@ export interface Badge {
   id: string;
   name: string;
   description: string;
-  iconName: string;
+  icon: string;
   rarity: 'comum' | 'raro' | 'epico' | 'lendario';
   earnedAt?: string;
   condition: string; // Description of how to earn

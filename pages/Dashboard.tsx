@@ -23,7 +23,9 @@ import MedicationTracker from '../components/MedicationTracker';
 import SymptomModal from '../components/SymptomModal';
 import WeightGoalCard from '../components/WeightGoalCard';
 import { getWeeklyChallenge, addXP, checkWeightBadges } from '../services/gamificationService';
-import { logSymptom, addWeightEntry, updateProfile } from '../services/databaseService';
+import { logSymptom } from '../services/healthService';
+import { addWeightEntry } from '../services/weightService';
+import { updateProfile } from '../services/profileService';
 import { getLocalDateString } from '../utils/dateUtils';
 import WeightInsightsCard from '../components/WeightInsightsCard';
 import MilestoneModal from '../components/MilestoneModal';
@@ -76,7 +78,11 @@ const Dashboard: React.FC<DashboardProps> = ({ user, userId, stats, updateWater,
   };
 
   useEffect(() => {
-    setChallenge(getWeeklyChallenge());
+    const fetchChallenge = async () => {
+      const challengeData = await getWeeklyChallenge(userId);
+      setChallenge(challengeData);
+    };
+    fetchChallenge();
   }, []);
 
   // Check for unclaimed milestones on mount/update
@@ -91,11 +97,12 @@ const Dashboard: React.FC<DashboardProps> = ({ user, userId, stats, updateWater,
 
   const handleLogSymptom = async (symptom: string, severity: number, notes?: string) => {
     await logSymptom(userId, symptom, severity, notes);
+    window.location.reload();
   };
 
   const handleClaimXP = async (xp: number, milestoneId: string) => {
     // Add XP locally and sync
-    addXP(xp, 'unlockBadge'); // Using unlockBadge action for milestone XP
+    addXP(userId, xp, 'unlockBadge'); // Using unlockBadge action for milestone XP
 
     // Update milestone as claimed in DB
     if (user.weightGoal && user.weightGoal.milestones) {

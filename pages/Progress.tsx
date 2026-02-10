@@ -2,7 +2,11 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Area, AreaChart, ReferenceLine } from 'recharts';
 import { TrendingUp, TrendingDown, Plus, Calendar, Target, Flame, Activity, ChevronDown, Share2, Download, Loader2, Trophy, Zap, Flag } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { getWeightHistory, addWeightEntry, calculateStreak, getWeeklyStats, getMeals } from '../services/databaseService';
+import { getWeightHistory, addWeightEntry } from '../services/weightService';
+import { calculateStreak } from '../services/gamificationService';
+import { getWeeklyStats } from '../services/statsService';
+import { getMeals } from '../services/mealService';
+
 import { generateWeeklySummaryImage, shareImage, getWeekRange, isShareSupported } from '../services/shareService';
 import WeightModal from '../components/WeightModal';
 import { WeightGoal } from '../types';
@@ -46,7 +50,7 @@ const Progress: React.FC = () => {
 
       // Format dates for display
       const formattedWeight = reversedWeight.map(entry => ({
-        day: formatDate(entry.day),
+        day: formatDate(entry.date),
         weight: entry.weight,
       }));
       setWeightHistory(formattedWeight);

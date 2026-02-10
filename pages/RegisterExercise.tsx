@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import { Exercise, User } from '../types';
 import { getLocalDateString } from '../utils/dateUtils';
-import { getExercisesPaginated, deleteExercise as dbDeleteExercise } from '../services/databaseService';
+import { getExercisesPaginated, deleteExercise as dbDeleteExercise } from '../services/exerciseService';
 
 interface RegisterExerciseProps {
   user: User;
@@ -270,8 +270,8 @@ const RegisterExercise: React.FC<RegisterExerciseProps> = ({ user, onSave, onUpd
                   type="button"
                   onClick={() => handleSelectActivity(name)}
                   className={`flex flex-col items-center justify-center p-2 rounded-xl border transition-all ${exerciseData.name === name
-                      ? 'border-teal-500 bg-teal-50 text-teal-700 ring-2 ring-teal-200'
-                      : 'border-gray-100 hover:border-teal-300 hover:bg-gray-50 text-gray-500'
+                    ? 'border-teal-500 bg-teal-50 text-teal-700 ring-2 ring-teal-200'
+                    : 'border-gray-100 hover:border-teal-300 hover:bg-gray-50 text-gray-500'
                     }`}
                 >
                   <Icon size={20} className="mb-1" />
@@ -303,8 +303,8 @@ const RegisterExercise: React.FC<RegisterExerciseProps> = ({ user, onSave, onUpd
                     type="button"
                     onClick={() => setExerciseData({ ...exerciseData, intensity: level })}
                     className={`flex-1 py-2 rounded-lg text-xs font-bold capitalize transition-all ${exerciseData.intensity === level
-                        ? 'bg-white text-teal-700 shadow-sm'
-                        : 'text-gray-400 hover:text-gray-600'
+                      ? 'bg-white text-teal-700 shadow-sm'
+                      : 'text-gray-400 hover:text-gray-600'
                       }`}
                   >
                     {level === 'low' ? 'Baixa' : level === 'medium' ? 'Média' : 'Alta'}
@@ -345,8 +345,8 @@ const RegisterExercise: React.FC<RegisterExerciseProps> = ({ user, onSave, onUpd
                     setAutoCalculated(false);
                   }}
                   className={`w-full px-4 py-3 rounded-xl border focus:ring-4 outline-none transition text-gray-700 font-mono ${autoCalculated
-                      ? 'border-teal-300 bg-teal-50 text-teal-800'
-                      : 'border-gray-200 focus:border-teal-500 focus:ring-teal-100'
+                    ? 'border-teal-300 bg-teal-50 text-teal-800'
+                    : 'border-gray-200 focus:border-teal-500 focus:ring-teal-100'
                     }`}
                   placeholder="0"
                 />
@@ -396,8 +396,8 @@ const RegisterExercise: React.FC<RegisterExerciseProps> = ({ user, onSave, onUpd
             <button
               type="submit"
               className={`flex-1 py-3.5 rounded-xl text-white font-bold active:scale-[0.98] transition shadow-lg shadow-teal-500/30 flex items-center justify-center gap-2 ${editingId
-                  ? 'bg-amber-500 hover:bg-amber-600'
-                  : 'bg-gradient-to-r from-teal-500 to-teal-600 hover:from-teal-600 hover:to-teal-700'
+                ? 'bg-amber-500 hover:bg-amber-600'
+                : 'bg-gradient-to-r from-teal-500 to-teal-600 hover:from-teal-600 hover:to-teal-700'
                 }`}
             >
               {editingId ? <><Edit2 size={20} /> Atualizar</> : <><Save size={20} /> Salvar Atividade</>}
@@ -475,8 +475,8 @@ const RegisterExercise: React.FC<RegisterExerciseProps> = ({ user, onSave, onUpd
                               <span className="flex items-center gap-1"><Clock size={11} /> {exercise.time}</span>
                               <span className="flex items-center gap-1"><Activity size={11} /> {exercise.durationMinutes} min</span>
                               <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium border ${exercise.intensity === 'high' ? 'bg-red-50 text-red-600 border-red-100' :
-                                  exercise.intensity === 'medium' ? 'bg-orange-50 text-orange-600 border-orange-100' :
-                                    'bg-blue-50 text-blue-600 border-blue-100'
+                                exercise.intensity === 'medium' ? 'bg-orange-50 text-orange-600 border-orange-100' :
+                                  'bg-blue-50 text-blue-600 border-blue-100'
                                 }`}>
                                 {exercise.intensity === 'high' ? 'Intenso' : exercise.intensity === 'medium' ? 'Médio' : 'Leve'}
                               </span>

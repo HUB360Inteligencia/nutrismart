@@ -5,7 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import {
   BADGE_DEFINITIONS,
   ACHIEVEMENT_DEFINITIONS,
-  getUserProgress,
+  getUserProgressLocal,
   getUserProgressAsync,
   getUserBadgesAsync,
   getLevelProgress,
@@ -20,22 +20,24 @@ interface AwardsProps {
 const Awards: React.FC<AwardsProps> = ({ unlockedIds = [] }) => {
   const { authUser } = useAuth();
   const [progress, setProgress] = useState<UserProgress | null>(null);
-  const [challenge, setChallenge] = useState(getWeeklyChallenge());
+  const [challenge, setChallenge] = useState<any>(null); // Use proper type if available, avoiding import cycle issues if any
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const loadData = async () => {
       // Load from localStorage first for instant display
-      setProgress(getUserProgress());
+      setProgress(getUserProgressLocal());
 
       // Then sync with Supabase
       if (authUser?.id) {
         try {
-          const [dbProgress, dbBadges] = await Promise.all([
+          const [dbProgress, dbBadges, dbChallenge] = await Promise.all([
             getUserProgressAsync(authUser.id),
             getUserBadgesAsync(authUser.id),
+            getWeeklyChallenge(authUser.id)
           ]);
           setProgress({ ...dbProgress, badges: dbBadges });
+          setChallenge(dbChallenge);
         } catch (error) {
           console.warn('Failed to sync with Supabase:', error);
         }

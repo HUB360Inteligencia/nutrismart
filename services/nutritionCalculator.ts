@@ -457,3 +457,22 @@ export function getGoalLabel(goal: Goal): string {
     };
     return labels[goal];
 }
+
+/**
+ * Calculate daily statistics from a list of meals
+ */
+export function calculateDailyStats(meals: any[]): { caloriesConsumed: number; proteinConsumed: number; carbsConsumed: number; fatsConsumed: number } {
+    return meals.reduce((acc, meal) => {
+        return {
+            caloriesConsumed: acc.caloriesConsumed + (meal.calories || 0),
+            proteinConsumed: acc.proteinConsumed + (meal.protein || 0),
+            carbsConsumed: acc.carbsConsumed + (meal.carbs || 0),
+            fatsConsumed: acc.fatsConsumed + (meal.fats || 0)
+        };
+    }, {
+        caloriesConsumed: 0,
+        proteinConsumed: 0,
+        carbsConsumed: 0,
+        fatsConsumed: 0
+    });
+}

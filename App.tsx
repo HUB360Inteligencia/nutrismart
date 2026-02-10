@@ -19,11 +19,13 @@ import Onboarding, { OnboardingData } from './pages/Onboarding';
 import AIChat from './components/AIChat';
 import LevelUpModal from './components/LevelUpModal';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { NutritionProvider, useNutrition } from './contexts/NutritionContext';
+import { GamificationProvider, useGamification } from './contexts/GamificationContext';
 import { useToast } from './contexts/ToastContext';
 import { NavItem, User, DailyStats, Meal, Exercise } from './types';
-import { checkAchievements, addXP, XP_TABLE, updateChallengeProgress, initGamificationService, checkStreakBadges } from './services/gamificationService';
-import { initializeNotifications, scheduleClinicalNotifications } from './services/notificationService';
-import * as db from './services/databaseService';
+import * as profileService from './services/profileService';
+import { XP_VALUES } from './services/gamificationService';
+import { initializeNotifications } from './services/notificationService';
 
 // Default user for fallback
 const DEFAULT_USER: User = {
@@ -98,117 +100,39 @@ const LoadingScreen: React.FC = () => (
 );
 
 // Main App Content (authenticated)
+// Main App Content (authenticated)
 const AppContent: React.FC = () => {
   const { authUser, profile, signOut, refreshProfile } = useAuth();
+  const { meals, exercises, stats, addMeal, updateMeal, deleteMeal, addExercise, updateExercise, deleteExercise, addWater } = useNutrition();
+  const { xp, level, streak, badges: unlockedAchievements, weeklyStats, addXP, showLevelUp, setShowLevelUp, newLevel } = useGamification();
+
   const toast = useToast();
   const [activeItem, setActiveItem] = useState<NavItem>(NavItem.Dashboard);
-  const [isLoaded, setIsLoaded] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
-  // GLOBAL STATE
-  const [user, setUser] = useState<User>(DEFAULT_USER);
-  const [waterConsumed, setWaterConsumed] = useState(0);
-  const [meals, setMeals] = useState<Meal[]>([]);
-  const [exercises, setExercises] = useState<Exercise[]>([]);
-  const [unlockedAchievements, setUnlockedAchievements] = useState<string[]>([]);
-  const [stats, setStats] = useState<DailyStats>({
-    caloriesConsumed: 0,
-    caloriesBurned: 0,
-    proteinConsumed: 0,
-    carbsConsumed: 0,
-    fatsConsumed: 0,
-    waterConsumed: 0
-  });
-  const [streak, setStreak] = useState(0);
-  const [weeklyStats, setWeeklyStats] = useState<{ date: string; stats: DailyStats; achieved: boolean }[]>([]);
+  // Derive display user from profile or default
+  const user = profile || DEFAULT_USER;
 
-  // Level Up Modal state
-  const [showLevelUp, setShowLevelUp] = useState(false);
-  const [newLevel, setNewLevel] = useState(1);
-
-  // Load data from Supabase on mount
-  const loadData = useCallback(async () => {
-    if (!authUser) return;
-
-    // Initialize gamification service with user ID
-    initGamificationService(authUser.id);
-
-    try {
-      const [todayMeals, todayExercises, todayWater, achievements, weekly, streakVal] = await Promise.all([
-        db.getTodayMeals(authUser.id),
-        db.getTodayExercises(authUser.id),
-        db.getTodayWater(authUser.id),
-        db.getUnlockedAchievements(authUser.id),
-        db.getWeeklyStats(authUser.id),
-        db.calculateStreak(authUser.id),
-      ]);
-
-      setMeals(todayMeals);
-      setExercises(todayExercises);
-      setWaterConsumed(todayWater);
-      setUnlockedAchievements(achievements);
-      setWeeklyStats(weekly);
-      setStreak(streakVal);
-
-      // Check and unlock streak-based badges
-      checkStreakBadges(streakVal);
-    } catch (error) {
-      console.error('Error loading data:', error);
-    } finally {
-      setIsLoaded(true);
-    }
-  }, [authUser]);
-
+  // Initialize notifications on mount
   useEffect(() => {
-    loadData();
-  }, [loadData]);
-
-  // Update user from profile
-  useEffect(() => {
+    console.log("AppContent mounted, initializing...");
     if (profile) {
-      setUser(profile);
-
-      // Initialize notifications
-      initializeNotifications(
-        (profile.isClinicalMode && profile.clinicalSettings)
-          ? profile.clinicalSettings
-          : undefined
-      );
+      try {
+        initializeNotifications(
+          (profile.isClinicalMode && profile.clinicalSettings)
+            ? profile.clinicalSettings
+            : undefined
+        );
+      } catch (error) {
+        console.error("Failed to initialize notifications:", error);
+      }
     }
   }, [profile]);
 
-  // Calculate stats whenever meals, exercises or water changes
-  useEffect(() => {
-    const newStats: DailyStats = {
-      caloriesConsumed: meals.reduce((acc, meal) => acc + meal.calories, 0),
-      caloriesBurned: exercises.reduce((acc, ex) => acc + ex.caloriesBurned, 0),
-      proteinConsumed: meals.reduce((acc, meal) => acc + meal.macros.protein, 0),
-      carbsConsumed: meals.reduce((acc, meal) => acc + meal.macros.carbs, 0),
-      fatsConsumed: meals.reduce((acc, meal) => acc + meal.macros.fats, 0),
-      waterConsumed: waterConsumed
-    };
-    setStats(newStats);
-
-    // CHECK GAMIFICATION
-    if (isLoaded && authUser) {
-      const newUnlocked = checkAchievements(user, newStats, meals, exercises, unlockedAchievements);
-      if (newUnlocked.length > unlockedAchievements.length) {
-        const diff = newUnlocked.filter(x => !unlockedAchievements.includes(x));
-        // Unlock new achievements in database
-        diff.forEach(achievementId => {
-          db.unlockAchievement(authUser.id, achievementId);
-        });
-        setUnlockedAchievements(newUnlocked);
-      }
-    }
-  }, [meals, exercises, waterConsumed, isLoaded, authUser, user, unlockedAchievements]);
-
   // Handlers
   const handleUpdateWater = async (amount: number) => {
-    if (!authUser) return;
-
     try {
-      const newAmount = await db.updateWaterConsumption(authUser.id, amount);
-      setWaterConsumed(newAmount);
+      await addWater(amount);
       if (amount > 0) {
         toast.success(`+${amount}ml de água adicionados! 💧`);
       }
@@ -218,96 +142,46 @@ const AppContent: React.FC = () => {
   };
 
   const handleAddMeal = async (newMeal: Omit<Meal, 'id'>) => {
-    if (!authUser) {
-      console.error('handleAddMeal: No authenticated user');
-      toast.error('Você precisa estar logado para salvar refeições');
-      return;
-    }
-
-    console.log('handleAddMeal: Saving meal...', {
-      name: newMeal.name,
-      type: newMeal.type,
-      calories: newMeal.calories
-    });
-
     try {
-      const savedMeal = await db.addMeal(authUser.id, newMeal);
+      await addMeal(newMeal);
+      setActiveItem(NavItem.Dashboard);
 
-      if (savedMeal) {
-        console.log('handleAddMeal: Meal saved successfully', savedMeal.id);
-        setMeals(prev => [savedMeal, ...prev]);
-        setActiveItem(NavItem.Dashboard);
-
-        // Award XP for registering meal
-        const xpResult = addXP(XP_TABLE.registerMeal, 'registerMeal');
-        if (xpResult.leveledUp) {
-          setNewLevel(xpResult.newLevel);
-          setShowLevelUp(true);
-        }
-
-        // Update weekly challenge progress (meals type)
-        updateChallengeProgress(1);
-
-        toast.success(`Refeição registrada! +${XP_TABLE.registerMeal} XP 🍽️`);
-      } else {
-        // savedMeal is null - database returned error
-        console.error('handleAddMeal: db.addMeal returned null');
-        toast.error('Não foi possível salvar a refeição. Verifique os dados e tente novamente.');
-        throw new Error('Failed to save meal - database returned null');
-      }
+      // Award XP
+      const xpResult = await addXP(XP_VALUES.LOG_MEAL, 'registerMeal');
+      toast.success(`Refeição registrada! +${XP_VALUES.LOG_MEAL} XP 🍽️`);
     } catch (error) {
       console.error('handleAddMeal: Error saving meal:', error);
       toast.error('Erro ao salvar refeição. Tente novamente.');
-      throw error; // Re-throw para que o RegisterMeal.tsx saiba que falhou
     }
   };
 
   const handleUpdateMeal = async (updatedMeal: Meal) => {
-    console.log('handleUpdateMeal: Updating meal...', updatedMeal.id);
-
     try {
-      const success = await db.updateMeal(updatedMeal.id, updatedMeal);
-      if (success) {
-        console.log('handleUpdateMeal: Meal updated successfully');
-        setMeals(prev => prev.map(meal => meal.id === updatedMeal.id ? updatedMeal : meal));
-        toast.success('Refeição atualizada com sucesso!');
-        setActiveItem(NavItem.Dashboard);
-      } else {
-        console.error('handleUpdateMeal: db.updateMeal returned false');
-        toast.error('Não foi possível atualizar a refeição.');
-        throw new Error('Failed to update meal');
-      }
+      await updateMeal(updatedMeal.id, updatedMeal);
+      // await refreshProfile(); // Refresh profile/context if needed
+      toast.success('Refeição atualizada com sucesso!');
+      setActiveItem(NavItem.Dashboard);
     } catch (error) {
-      console.error('handleUpdateMeal: Error updating meal:', error);
-      toast.error('Erro ao atualizar refeição. Tente novamente.');
-      throw error;
+      toast.error('Erro ao atualizar refeição.');
     }
   };
 
   const handleDeleteMeal = async (mealId: string) => {
-    setMeals(prev => prev.filter(m => m.id !== mealId));
+    try {
+      await deleteMeal(mealId);
+      toast.success('Refeição removida.');
+    } catch (error) {
+      toast.error('Erro ao remover refeição.');
+    }
   };
 
   const handleAddExercise = async (newExercise: Omit<Exercise, 'id'>) => {
-    if (!authUser) return;
-
     try {
-      const savedExercise = await db.addExercise(authUser.id, newExercise);
-      if (savedExercise) {
-        setExercises(prev => [savedExercise, ...prev]);
+      await addExercise(newExercise);
 
-        // Award XP for registering exercise
-        const xpResult = addXP(XP_TABLE.registerExercise, 'registerExercise');
-        if (xpResult.leveledUp) {
-          setNewLevel(xpResult.newLevel);
-          setShowLevelUp(true);
-        }
-
-        // Update weekly challenge progress (exercise type)
-        updateChallengeProgress(1);
-
-        toast.success(`Exercício registrado! +${XP_TABLE.registerExercise} XP 🏋️`);
-      }
+      // Award XP
+      const xpResult = await addXP(XP_VALUES.LOG_EXERCISE, 'registerExercise');
+      toast.success(`Exercício registrado! +${XP_VALUES.LOG_EXERCISE} XP 🏋️`);
     } catch (error) {
       toast.error('Erro ao salvar exercício');
     }
@@ -315,31 +189,62 @@ const AppContent: React.FC = () => {
 
   const handleUpdateExercise = async (updatedExercise: Exercise) => {
     try {
-      const success = await db.updateExercise(updatedExercise.id, updatedExercise);
-      if (success) {
-        setExercises(prev => prev.map(ex => ex.id === updatedExercise.id ? updatedExercise : ex));
-        toast.success('Exercício atualizado!');
-      }
+      await updateExercise(updatedExercise.id, updatedExercise);
+      toast.success('Exercício atualizado!');
     } catch (error) {
       toast.error('Erro ao atualizar exercício');
     }
   };
 
   const handleDeleteExercise = async (exerciseId: string) => {
-    setExercises(prev => prev.filter(e => e.id !== exerciseId));
+    try {
+      await deleteExercise(exerciseId);
+      toast.success('Exercício removido.');
+    } catch (error) {
+      toast.error('Erro ao remover exercício.');
+    }
   };
 
   const handleUpdateUser = async (updatedUser: User) => {
     if (!authUser) return;
-
-    const success = await db.updateProfile(authUser.id, updatedUser);
-    if (success) {
-      setUser(updatedUser);
+    try {
+      await profileService.updateProfile(authUser.id, updatedUser);
       await refreshProfile();
       alert("Perfil atualizado com sucesso!");
       setActiveItem(NavItem.Dashboard);
+    } catch (error) {
+      console.error("Failed to update profile", error);
+      alert("Erro ao atualizar perfil.");
     }
   };
+
+  const handleOnboardingComplete = async (data: OnboardingData) => {
+    if (!authUser) return;
+    try {
+      await profileService.updateProfile(authUser.id, {
+        ...profile,
+        ...data,
+        onboardingCompleted: true
+      });
+      toast.success('Bem-vindo ao NutriSmart! 🎉');
+      await refreshProfile();
+    } catch (e) {
+      console.error("Onboarding error", e);
+      toast.error("Erro ao salvar dados de onboarding");
+    }
+  };
+
+  // Check if user needs onboarding
+  const needsOnboarding = profile && !profile.onboardingCompleted;
+
+  if (needsOnboarding) {
+    return (
+      <Onboarding
+        userName={profile?.name || 'Usuário'}
+        onComplete={handleOnboardingComplete}
+      />
+    );
+  }
 
   const renderContent = () => {
     switch (activeItem) {
@@ -396,7 +301,7 @@ const AppContent: React.FC = () => {
             onSignOut={signOut}
             onToggleClinicalMode={async (enabled) => {
               if (!authUser) return;
-              await db.toggleClinicalMode(authUser.id, enabled);
+              await profileService.updateProfile(authUser.id, { isClinicalMode: enabled });
               await refreshProfile();
             }}
           />
@@ -405,47 +310,6 @@ const AppContent: React.FC = () => {
         return <Dashboard user={user} userId={authUser?.id || ''} stats={stats} updateWater={handleUpdateWater} recentMeals={meals} recentExercises={exercises} onNavigate={setActiveItem} streak={streak} weeklyStats={weeklyStats} />;
     }
   };
-
-  // Check if user needs onboarding
-  const needsOnboarding = profile && !profile.onboardingCompleted;
-
-  // Handle onboarding completion
-  const handleOnboardingComplete = async (data: OnboardingData) => {
-    if (!authUser) return;
-
-    const success = await db.completeOnboarding(authUser.id, {
-      weight: data.weight,
-      height: data.height,
-      age: data.age,
-      gender: data.gender,
-      goal: data.goal,
-      activityLevel: data.activityLevel,
-      dailyCalorieGoal: data.dailyCalorieGoal,
-      dailyWaterGoal: data.dailyWaterGoal,
-      macros: data.macros,
-      isClinicalMode: data.isClinicalMode,
-      clinicalSettings: data.clinicalSettings,
-    });
-
-    if (success) {
-      toast.success('Bem-vindo ao NutriSmart! 🎉');
-      await refreshProfile();
-    }
-  };
-
-  if (!isLoaded) {
-    return <LoadingScreen />;
-  }
-
-  // Show onboarding for new users
-  if (needsOnboarding) {
-    return (
-      <Onboarding
-        userName={profile?.name || 'Usuário'}
-        onComplete={handleOnboardingComplete}
-      />
-    );
-  }
 
   return (
     <AppLayout currentPath={activeItem} onNavigate={setActiveItem}>
@@ -464,7 +328,11 @@ const AppContent: React.FC = () => {
 const App: React.FC = () => {
   return (
     <AuthProvider>
-      <AuthenticatedApp />
+      <NutritionProvider>
+        <GamificationProvider>
+          <AuthenticatedApp />
+        </GamificationProvider>
+      </NutritionProvider>
     </AuthProvider>
   );
 };

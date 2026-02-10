@@ -133,7 +133,20 @@
 </head>
 
 <body class="bg-[#F8FAFC] text-gray-900 antialiased selection:bg-nutri-200 selection:text-nutri-900">
-  <div id="root"></div>
+  <div id="root">
+    <div style="font-family: sans-serif; text-align: center; padding: 20px;">
+      <h1>Carregando NutriSmart...</h1>
+      <p>Se esta mensagem não desaparecer em alguns segundos, algo deu errado.</p>
+    </div>
+  </div>
+  <script>
+    window.addEventListener('error', function(event) {
+      document.body.innerHTML += '<div style="background:red;color:white;padding:20px;margin:20px;border-radius:8px;"><h2>Erro Global:</h2><pre>' + event.message + '\n' + (event.filename || '') + ':' + (event.lineno || '') + '</pre></div>';
+    });
+    window.addEventListener('unhandledrejection', function(event) {
+      document.body.innerHTML += '<div style="background:orange;color:white;padding:20px;margin:20px;border-radius:8px;"><h2>Promessa Rejeitada:</h2><pre>' + (event.reason ? event.reason.toString() : 'Sem detalhes') + '</pre></div>';
+    });
+  </script>
   <script type="module" src="/index.tsx"></script>
 </body>
 
