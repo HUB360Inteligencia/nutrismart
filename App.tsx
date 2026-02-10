@@ -284,6 +284,10 @@ const AppContent: React.FC = () => {
     }
   };
 
+  const handleDeleteMeal = async (mealId: string) => {
+    setMeals(prev => prev.filter(m => m.id !== mealId));
+  };
+
   const handleAddExercise = async (newExercise: Omit<Exercise, 'id'>) => {
     if (!authUser) return;
 
@@ -291,7 +295,6 @@ const AppContent: React.FC = () => {
       const savedExercise = await db.addExercise(authUser.id, newExercise);
       if (savedExercise) {
         setExercises(prev => [savedExercise, ...prev]);
-        setActiveItem(NavItem.Dashboard);
 
         // Award XP for registering exercise
         const xpResult = addXP(XP_TABLE.registerExercise, 'registerExercise');
@@ -308,6 +311,22 @@ const AppContent: React.FC = () => {
     } catch (error) {
       toast.error('Erro ao salvar exercício');
     }
+  };
+
+  const handleUpdateExercise = async (updatedExercise: Exercise) => {
+    try {
+      const success = await db.updateExercise(updatedExercise.id, updatedExercise);
+      if (success) {
+        setExercises(prev => prev.map(ex => ex.id === updatedExercise.id ? updatedExercise : ex));
+        toast.success('Exercício atualizado!');
+      }
+    } catch (error) {
+      toast.error('Erro ao atualizar exercício');
+    }
+  };
+
+  const handleDeleteExercise = async (exerciseId: string) => {
+    setExercises(prev => prev.filter(e => e.id !== exerciseId));
   };
 
   const handleUpdateUser = async (updatedUser: User) => {
@@ -339,9 +358,9 @@ const AppContent: React.FC = () => {
           />
         );
       case NavItem.RegisterMeal:
-        return <RegisterMeal onSave={handleAddMeal} onUpdate={handleUpdateMeal} history={meals} />;
+        return <RegisterMeal onSave={handleAddMeal} onUpdate={handleUpdateMeal} onDelete={handleDeleteMeal} />;
       case NavItem.RegisterExercise:
-        return <RegisterExercise user={user} onSave={handleAddExercise} />;
+        return <RegisterExercise user={user} onSave={handleAddExercise} onUpdate={handleUpdateExercise} onDelete={handleDeleteExercise} />;
       case NavItem.Recipes:
         return <Recipes />;
       case NavItem.MealPlanner:

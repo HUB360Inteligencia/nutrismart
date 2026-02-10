@@ -176,6 +176,49 @@ export async function getMeals(userId: string, date?: string): Promise<Meal[]> {
     }));
 }
 
+export async function getMealsPaginated(
+    userId: string,
+    options: { dateFrom?: string; dateTo?: string; limit?: number; offset?: number }
+): Promise<{ data: Meal[]; hasMore: boolean }> {
+    const limit = options.limit || 20;
+    let query = supabase
+        .from('meals')
+        .select('*')
+        .eq('user_id', userId)
+        .order('date', { ascending: false })
+        .order('created_at', { ascending: false });
+
+    if (options.dateFrom) query = query.gte('date', options.dateFrom);
+    if (options.dateTo) query = query.lte('date', options.dateTo);
+    query = query.range(options.offset || 0, (options.offset || 0) + limit);
+
+    const { data, error } = await query;
+
+    if (error) {
+        console.error('Error fetching paginated meals:', error);
+        return { data: [], hasMore: false };
+    }
+
+    const meals = data.slice(0, limit).map((meal) => ({
+        id: meal.id,
+        name: meal.name,
+        time: meal.time,
+        date: meal.date,
+        calories: meal.calories,
+        weight: meal.weight_grams,
+        ingredients: meal.ingredients || [],
+        macros: {
+            protein: meal.macro_protein,
+            carbs: meal.macro_carbs,
+            fats: meal.macro_fats,
+        },
+        type: meal.meal_type as Meal['type'],
+        image: meal.image_url,
+    }));
+
+    return { data: meals, hasMore: data.length > limit };
+}
+
 export async function getTodayMeals(userId: string): Promise<Meal[]> {
     const today = getLocalDateString();
     return getMeals(userId, today);
@@ -326,6 +369,42 @@ export async function getTodayExercises(userId: string): Promise<Exercise[]> {
     return getExercises(userId, today);
 }
 
+export async function getExercisesPaginated(
+    userId: string,
+    options: { dateFrom?: string; dateTo?: string; limit?: number; offset?: number }
+): Promise<{ data: Exercise[]; hasMore: boolean }> {
+    const limit = options.limit || 20;
+    let query = supabase
+        .from('exercises')
+        .select('*')
+        .eq('user_id', userId)
+        .order('date', { ascending: false })
+        .order('created_at', { ascending: false });
+
+    if (options.dateFrom) query = query.gte('date', options.dateFrom);
+    if (options.dateTo) query = query.lte('date', options.dateTo);
+    query = query.range(options.offset || 0, (options.offset || 0) + limit);
+
+    const { data, error } = await query;
+
+    if (error) {
+        console.error('Error fetching paginated exercises:', error);
+        return { data: [], hasMore: false };
+    }
+
+    const exercises = data.slice(0, limit).map((exercise) => ({
+        id: exercise.id,
+        name: exercise.name,
+        durationMinutes: exercise.duration_minutes,
+        caloriesBurned: exercise.calories_burned,
+        intensity: exercise.intensity,
+        time: exercise.time,
+        date: exercise.date,
+    }));
+
+    return { data: exercises, hasMore: data.length > limit };
+}
+
 export async function addExercise(userId: string, exercise: Omit<Exercise, 'id'>): Promise<Exercise | null> {
     const { data, error } = await supabase
         .from('exercises')
@@ -355,6 +434,31 @@ export async function addExercise(userId: string, exercise: Omit<Exercise, 'id'>
         time: data.time,
         date: data.date,
     };
+}
+
+export async function updateExercise(exerciseId: string, updates: Partial<Exercise>): Promise<boolean> {
+    const dbUpdates: Record<string, unknown> = {
+        updated_at: new Date().toISOString(),
+    };
+
+    if (updates.name !== undefined) dbUpdates.name = updates.name;
+    if (updates.durationMinutes !== undefined) dbUpdates.duration_minutes = updates.durationMinutes;
+    if (updates.caloriesBurned !== undefined) dbUpdates.calories_burned = Math.round(updates.caloriesBurned);
+    if (updates.intensity !== undefined) dbUpdates.intensity = updates.intensity;
+    if (updates.time !== undefined) dbUpdates.time = updates.time;
+    if (updates.date !== undefined) dbUpdates.date = updates.date;
+
+    const { error } = await supabase
+        .from('exercises')
+        .update(dbUpdates)
+        .eq('id', exerciseId);
+
+    if (error) {
+        console.error('Error updating exercise:', error);
+        return false;
+    }
+
+    return true;
 }
 
 export async function deleteExercise(exerciseId: string): Promise<boolean> {

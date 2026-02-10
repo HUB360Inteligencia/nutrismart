@@ -1,16 +1,20 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Camera, Save, Plus, Loader2, Image as ImageIcon, X, PenTool, Scale, Calendar, Clock, Trash2, Calculator, History, Eye, Copy, Edit2, ChevronRight, ScanLine, Sparkles } from 'lucide-react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { Camera, Save, Plus, Loader2, Image as ImageIcon, X, PenTool, Scale, Calendar, Clock, Trash2, Calculator, History, Eye, Copy, Edit2, ChevronRight, ScanLine, Sparkles, ChevronDown, Filter } from 'lucide-react';
 import { Meal } from '../types';
 import { analyzeFoodImage, calculateNutritionalInfo } from '../services/geminiService';
 import { getLocalDateString } from '../utils/dateUtils';
+import { getMealsPaginated, deleteMeal as dbDeleteMeal } from '../services/databaseService';
+import { useAuth } from '../contexts/AuthContext';
 import BarcodeScanner from '../components/BarcodeScanner';
 import { BarcodeProduct, calculateNutritionForServing } from '../services/barcodeService';
 import { searchIngredients } from '../data/brazilianIngredients';
 
+type HistoryPeriod = 'today' | 'week' | 'month' | 'all';
+
 interface RegisterMealProps {
   onSave: (meal: Omit<Meal, 'id'>) => Promise<void>;
   onUpdate: (meal: Meal) => Promise<void>;
-  history?: Meal[];
+  onDelete?: (mealId: string) => Promise<void>;
 }
 
 interface FoodItem {
@@ -20,7 +24,47 @@ interface FoodItem {
   unit: string;
 }
 
-const RegisterMeal: React.FC<RegisterMealProps> = ({ onSave, onUpdate, history = [] }) => {
+function getDateRange(period: HistoryPeriod): { dateFrom?: string; dateTo?: string } {
+  const today = getLocalDateString();
+  if (period === 'today') return { dateFrom: today, dateTo: today };
+  if (period === 'week') {
+    const d = new Date(); d.setDate(d.getDate() - 7);
+    return { dateFrom: getLocalDateString(d), dateTo: today };
+  }
+  if (period === 'month') {
+    const d = new Date(); d.setDate(d.getDate() - 30);
+    return { dateFrom: getLocalDateString(d), dateTo: today };
+  }
+  return {};
+}
+
+function formatDateLabel(dateStr: string): string {
+  const today = getLocalDateString();
+  const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayStr = getLocalDateString(yesterday);
+  if (dateStr === today) return 'Hoje';
+  if (dateStr === yesterdayStr) return 'Ontem';
+  const [y, m, d] = dateStr.split('-');
+  const months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+  return `${parseInt(d)} ${months[parseInt(m) - 1]} ${y}`;
+}
+
+function groupByDate(meals: Meal[]): { date: string; label: string; meals: Meal[] }[] {
+  const map = new Map<string, Meal[]>();
+  meals.forEach(m => {
+    const d = m.date || 'sem-data';
+    if (!map.has(d)) map.set(d, []);
+    map.get(d)!.push(m);
+  });
+  return Array.from(map.entries())
+    .sort(([a], [b]) => b.localeCompare(a))
+    .map(([date, meals]) => ({ date, label: formatDateLabel(date), meals }));
+}
+
+const HISTORY_PAGE_SIZE = 20;
+
+const RegisterMeal: React.FC<RegisterMealProps> = ({ onSave, onUpdate, onDelete }) => {
+  const { authUser } = useAuth();
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
 
@@ -62,6 +106,56 @@ const RegisterMeal: React.FC<RegisterMealProps> = ({ onSave, onUpdate, history =
   // State for editing individual ingredients
   const [editingIngredientId, setEditingIngredientId] = useState<string | null>(null);
   const [editingIngredientData, setEditingIngredientData] = useState({ name: '', quantity: '', unit: 'g' });
+
+  // === HISTORY STATE ===
+  const [historyPeriod, setHistoryPeriod] = useState<HistoryPeriod>('today');
+  const [historyMeals, setHistoryMeals] = useState<Meal[]>([]);
+  const [historyOffset, setHistoryOffset] = useState(0);
+  const [historyHasMore, setHistoryHasMore] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const loadHistory = useCallback(async (period: HistoryPeriod, offset: number, append = false) => {
+    if (!authUser) return;
+    setHistoryLoading(true);
+    try {
+      const range = getDateRange(period);
+      const result = await getMealsPaginated(authUser.id, {
+        ...range,
+        limit: HISTORY_PAGE_SIZE,
+        offset,
+      });
+      setHistoryMeals(prev => append ? [...prev, ...result.data] : result.data);
+      setHistoryHasMore(result.hasMore);
+      setHistoryOffset(offset + result.data.length);
+    } catch (err) {
+      console.error('Error loading meal history:', err);
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, [authUser]);
+
+  // Load history on mount and when period changes
+  useEffect(() => {
+    loadHistory(historyPeriod, 0);
+  }, [historyPeriod, loadHistory]);
+
+  const handleLoadMore = () => {
+    loadHistory(historyPeriod, historyOffset, true);
+  };
+
+  const handleDeleteMeal = async (mealId: string) => {
+    setDeletingId(mealId);
+    try {
+      const success = await dbDeleteMeal(mealId);
+      if (success) {
+        setHistoryMeals(prev => prev.filter(m => m.id !== mealId));
+        if (onDelete) await onDelete(mealId);
+      }
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   // Scroll to top when component mounts
   useEffect(() => {
@@ -490,6 +584,8 @@ const RegisterMeal: React.FC<RegisterMealProps> = ({ onSave, onUpdate, history =
       console.log('handleSubmit: Save successful, resetting form');
       // Only reset form AFTER successful save
       resetForm();
+      // Reload history to show the new/updated item
+      setTimeout(() => loadHistory(historyPeriod, 0), 500);
     } catch (error) {
       console.error("handleSubmit: Error saving meal:", error);
       // The toast error is already shown in App.tsx handleAddMeal
@@ -986,92 +1082,124 @@ const RegisterMeal: React.FC<RegisterMealProps> = ({ onSave, onUpdate, history =
 
       {/* History Section */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 md:p-8">
-        <h2 className="text-lg md:text-xl font-bold text-gray-900 mb-5 flex items-center gap-2">
-          <History size={22} className="text-teal-500" />
-          Histórico de Refeições
-        </h2>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
+          <h2 className="text-lg md:text-xl font-bold text-gray-900 flex items-center gap-2">
+            <History size={22} className="text-teal-500" />
+            Histórico de Refeições
+          </h2>
+          {/* Period Filter Tabs */}
+          <div className="flex gap-1 bg-gray-100 p-1 rounded-xl">
+            {([['today', 'Hoje'], ['week', 'Semana'], ['month', 'Mês'], ['all', 'Todos']] as [HistoryPeriod, string][]).map(([key, label]) => (
+              <button
+                key={key}
+                onClick={() => setHistoryPeriod(key)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${historyPeriod === key
+                  ? 'bg-white text-teal-700 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+                  }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
 
-        {history.length === 0 ? (
+        {historyLoading && historyMeals.length === 0 ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="w-6 h-6 text-teal-500 animate-spin" />
+            <span className="ml-2 text-gray-500 text-sm">Carregando histórico...</span>
+          </div>
+        ) : historyMeals.length === 0 ? (
           <div className="text-center py-12 text-gray-400">
             <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <History size={28} className="text-gray-300" />
             </div>
-            <p className="font-medium">Nenhuma refeição registrada</p>
-            <p className="text-sm mt-1">Comece tirando uma foto ou adicionando manualmente</p>
+            <p className="font-medium">Nenhuma refeição neste período</p>
+            <p className="text-sm mt-1">
+              {historyPeriod === 'today' ? 'Comece registrando sua primeira refeição de hoje' : 'Tente um período diferente'}
+            </p>
           </div>
         ) : (
-          <div className="space-y-3">
-            {history.slice(0, 5).map((meal, index) => (
-              <div
-                key={meal.id + index}
-                className={`relative flex flex-col p-4 rounded-xl border-2 transition-all duration-200 animate-fade-up cursor-pointer active:scale-[0.99] ${index === 0
-                  ? 'border-teal-200 bg-teal-50/50 hover:bg-teal-50'
-                  : 'border-gray-100 bg-gray-50/50 hover:bg-gray-100/50 hover:border-gray-200'
-                  }`}
-                style={{ animationDelay: `${index * 50}ms` }}
-                onClick={() => setViewingMeal(meal)}
-              >
-                {/* Badge for most recent */}
-                {index === 0 && (
-                  <span className="absolute -top-2 left-4 text-[10px] font-bold bg-teal-500 text-white px-2 py-0.5 rounded-full">
-                    MAIS RECENTE
+          <div className="space-y-6">
+            {groupByDate(historyMeals).map((group) => (
+              <div key={group.date}>
+                {/* Date Group Header */}
+                <div className="flex items-center gap-2 mb-3">
+                  <Calendar size={14} className="text-gray-400" />
+                  <span className="text-sm font-semibold text-gray-600">{group.label}</span>
+                  <div className="flex-1 h-px bg-gray-100" />
+                  <span className="text-xs text-gray-400">
+                    {group.meals.reduce((s, m) => s + m.calories, 0)} kcal total
                   </span>
-                )}
-
-                <div className="flex items-center gap-3 min-h-[56px]">
-                  {/* Meal Image */}
-                  <div className="w-14 h-14 bg-white rounded-xl flex items-center justify-center text-2xl shadow-sm overflow-hidden flex-shrink-0 border border-gray-100">
-                    {meal.image ? (
-                      <img src={meal.image} alt={meal.name} className="w-full h-full object-cover" />
-                    ) : (
-                      meal.type === 'breakfast' ? '☕' : meal.type === 'lunch' ? '🥗' : meal.type === 'dinner' ? '🍲' : '🍎'
-                    )}
-                  </div>
-
-                  {/* Meal Info */}
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-bold text-gray-800 truncate">{meal.name}</h3>
-                    <div className="flex flex-wrap gap-2 text-xs text-gray-500 mt-1">
-                      <span className="flex items-center gap-1"><Clock size={12} /> {meal.time}</span>
-                      {meal.weight && <span className="flex items-center gap-1"><Scale size={12} /> {meal.weight}g</span>}
-                    </div>
-                  </div>
-
-                  {/* Calories */}
-                  <div className="text-right flex-shrink-0">
-                    <span className="block font-bold text-lg text-gray-900">{meal.calories}</span>
-                    <span className="text-xs text-gray-400">kcal</span>
-                  </div>
                 </div>
-
-                {/* Macros Row */}
-                <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-100/50">
-                  <div className="flex gap-1.5 flex-1">
-                    <span className="text-xs font-medium px-2 py-1 rounded-md bg-blue-100 text-blue-700">P: {meal.macros.protein}g</span>
-                    <span className="text-xs font-medium px-2 py-1 rounded-md bg-amber-100 text-amber-700">C: {meal.macros.carbs}g</span>
-                    <span className="text-xs font-medium px-2 py-1 rounded-md bg-rose-100 text-rose-700">G: {meal.macros.fats}g</span>
-                  </div>
-
-                  {/* Quick Actions */}
-                  <div className="flex gap-1">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); loadMealIntoForm(meal, 'copy'); }}
-                      className="p-2.5 rounded-lg text-gray-400 hover:text-teal-600 hover:bg-white active:bg-teal-50 transition"
-                      title="Duplicar"
+                {/* Meals in this date group */}
+                <div className="space-y-2.5">
+                  {group.meals.map((meal) => (
+                    <div
+                      key={meal.id}
+                      className="relative flex flex-col p-4 rounded-xl border border-gray-100 bg-gray-50/50 hover:bg-gray-100/50 hover:border-gray-200 transition-all duration-200 cursor-pointer active:scale-[0.99]"
+                      onClick={() => setViewingMeal(meal)}
                     >
-                      <Copy size={18} />
-                    </button>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); loadMealIntoForm(meal, 'edit'); }}
-                      className="p-2.5 rounded-lg text-gray-400 hover:text-amber-600 hover:bg-white active:bg-amber-50 transition"
-                      title="Editar"
-                    >
-                      <Edit2 size={18} />
-                    </button>
-                  </div>
+                      <div className="flex items-center gap-3 min-h-[48px]">
+                        <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center text-xl shadow-sm overflow-hidden flex-shrink-0 border border-gray-100">
+                          {meal.image ? (
+                            <img src={meal.image} alt={meal.name} className="w-full h-full object-cover" />
+                          ) : (
+                            meal.type === 'breakfast' ? '☕' : meal.type === 'lunch' ? '🥗' : meal.type === 'dinner' ? '🍲' : '🍎'
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-bold text-gray-800 truncate text-sm">{meal.name}</h3>
+                          <div className="flex flex-wrap gap-2 text-xs text-gray-500 mt-0.5">
+                            <span className="flex items-center gap-1"><Clock size={11} /> {meal.time}</span>
+                            {meal.weight && <span className="flex items-center gap-1"><Scale size={11} /> {meal.weight}g</span>}
+                          </div>
+                        </div>
+                        <div className="text-right flex-shrink-0">
+                          <span className="block font-bold text-base text-gray-900">{meal.calories}</span>
+                          <span className="text-[10px] text-gray-400">kcal</span>
+                        </div>
+                      </div>
+                      {/* Macros + Actions */}
+                      <div className="flex items-center gap-2 mt-2.5 pt-2.5 border-t border-gray-100/50">
+                        <div className="flex gap-1.5 flex-1">
+                          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">P:{meal.macros.protein}g</span>
+                          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">C:{meal.macros.carbs}g</span>
+                          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-rose-100 text-rose-700">G:{meal.macros.fats}g</span>
+                        </div>
+                        <div className="flex gap-0.5">
+                          <button onClick={(e) => { e.stopPropagation(); loadMealIntoForm(meal, 'copy'); }} className="p-2 rounded-lg text-gray-400 hover:text-teal-600 hover:bg-white transition" title="Duplicar"><Copy size={16} /></button>
+                          <button onClick={(e) => { e.stopPropagation(); loadMealIntoForm(meal, 'edit'); }} className="p-2 rounded-lg text-gray-400 hover:text-amber-600 hover:bg-white transition" title="Editar"><Edit2 size={16} /></button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); if (confirm('Excluir esta refeição?')) handleDeleteMeal(meal.id); }}
+                            disabled={deletingId === meal.id}
+                            className="p-2 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition disabled:opacity-50"
+                            title="Excluir"
+                          >
+                            {deletingId === meal.id ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             ))}
+
+            {/* Load More */}
+            {historyHasMore && (
+              <button
+                onClick={handleLoadMore}
+                disabled={historyLoading}
+                className="w-full py-3 rounded-xl border-2 border-dashed border-gray-200 text-gray-500 hover:border-teal-300 hover:text-teal-600 hover:bg-teal-50/30 font-medium text-sm transition-all flex items-center justify-center gap-2"
+              >
+                {historyLoading ? (
+                  <><Loader2 size={16} className="animate-spin" /> Carregando...</>
+                ) : (
+                  <><ChevronDown size={16} /> Carregar mais refeições</>
+                )}
+              </button>
+            )}
           </div>
         )}
       </div>
