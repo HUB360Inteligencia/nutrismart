@@ -665,53 +665,62 @@ const RegisterMeal: React.FC<RegisterMealProps> = ({ onSave, onUpdate, onDelete 
         />
 
         {inputMode === 'none' && (
-          <div className="space-y-3 md:space-y-4">
-            {/* Hero: Camera Button - Mobile full width, Desktop 50% */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 animate-fade-in">
+            {/* Camera Button: 1 col on mobile (compact), 2 cols on desktop (prominent) */}
             <button
               onClick={() => cameraInputRef.current?.click()}
-              className="w-full flex items-center gap-4 p-4 md:p-5 min-h-[72px] rounded-xl bg-amber-gradient text-white hover:opacity-95 hover:shadow-xl hover:shadow-orange-200/50 active:scale-[0.98] transition-all duration-200 animate-fade-up group"
+              className="col-span-1 md:col-span-2 flex flex-col md:flex-row items-center justify-center md:justify-start gap-2 md:gap-4 p-3 md:p-5 min-h-[90px] md:min-h-[120px] rounded-2xl bg-amber-gradient text-white hover:opacity-95 hover:shadow-xl hover:shadow-orange-200/50 active:scale-[0.98] transition-all duration-200 group relative overflow-hidden"
             >
-              <div className="w-14 h-14 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
-                <Camera size={28} className="text-white" />
+              <div className="absolute top-0 right-0 p-3 opacity-10 rotate-12 transform scale-150 pointer-events-none hidden md:block">
+                <Camera size={80} />
               </div>
-              <div className="text-left">
-                <span className="font-bold text-lg block">Tirar Foto</span>
-                <span className="text-white/80 text-sm">Analisar refeição com IA</span>
+              <div className="w-10 h-10 md:w-14 md:h-14 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform z-10 flex-shrink-0">
+                <Camera size={20} className="text-white md:w-7 md:h-7" />
+              </div>
+              <div className="text-center md:text-left z-10">
+                <span className="font-bold text-sm md:text-lg block leading-tight">Tirar Foto</span>
+                <span className="text-white/80 text-[10px] md:text-sm hidden md:block">IA identifica tudo</span>
               </div>
             </button>
 
-            {/* Secondary Actions - 2 columns on mobile, 3 on desktop */}
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              <button
-                onClick={() => galleryInputRef.current?.click()}
-                className="flex flex-col items-center justify-center gap-2 p-4 min-h-[80px] rounded-xl border-2 border-teal-100 bg-teal-50 text-teal-700 hover:bg-teal-100 hover:border-teal-200 hover:shadow-lg active:scale-[0.98] transition-all duration-200 animate-fade-up stagger-1 group"
-              >
-                <div className="w-11 h-11 bg-white rounded-lg flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
-                  <ImageIcon size={22} className="text-teal-600" />
-                </div>
-                <span className="font-semibold text-sm">Galeria</span>
-              </button>
+            {/* Gallery Button: 1 col mobile, 1 col desktop */}
+            <button
+              onClick={() => galleryInputRef.current?.click()}
+              className="col-span-1 md:col-span-1 flex flex-col items-center justify-center gap-2 p-3 md:p-4 min-h-[90px] md:min-h-[120px] rounded-2xl border-2 border-teal-100 bg-teal-50 text-teal-700 hover:bg-teal-100 hover:border-teal-200 hover:shadow-lg active:scale-[0.98] transition-all duration-200 group"
+            >
+              <div className="w-9 h-9 md:w-11 md:h-11 bg-white rounded-xl flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
+                <ImageIcon size={18} className="text-teal-600 md:w-[22px] md:h-[22px]" />
+              </div>
+              <span className="font-semibold text-xs md:text-sm">Galeria</span>
+            </button>
 
-              <button
-                onClick={handleManualClick}
-                className="flex flex-col items-center justify-center gap-2 p-4 min-h-[80px] rounded-xl border-2 border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100 hover:border-slate-300 hover:shadow-lg active:scale-[0.98] transition-all duration-200 animate-fade-up stagger-2 group"
-              >
-                <div className="w-11 h-11 bg-white rounded-lg flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
-                  <PenTool size={22} className="text-slate-600" />
-                </div>
-                <span className="font-semibold text-sm">Manual</span>
-              </button>
+            {/* Manual Button: 1 col mobile, 1 col desktop */}
+            <button
+              onClick={handleManualClick}
+              className="col-span-1 md:col-span-1 flex flex-col items-center justify-center gap-2 p-3 md:p-4 min-h-[90px] md:min-h-[120px] rounded-2xl border-2 border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100 hover:border-slate-300 hover:shadow-lg active:scale-[0.98] transition-all duration-200 group"
+            >
+              <div className="w-9 h-9 md:w-11 md:h-11 bg-white rounded-xl flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
+                <PenTool size={18} className="text-slate-600 md:w-[22px] md:h-[22px]" />
+              </div>
+              <span className="font-semibold text-xs md:text-sm">Manual</span>
+            </button>
 
-              <button
-                onClick={() => setShowBarcodeScanner(true)}
-                className="col-span-2 md:col-span-1 flex flex-col items-center justify-center gap-2 p-4 min-h-[56px] md:min-h-[80px] rounded-xl border-2 border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 hover:border-amber-300 hover:shadow-lg active:scale-[0.98] transition-all duration-200 animate-fade-up stagger-3 group"
-              >
-                <div className="w-11 h-11 bg-white rounded-lg flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
-                  <ScanLine size={22} className="text-amber-600" />
-                </div>
-                <span className="font-semibold text-sm">Código de Barras</span>
-              </button>
-            </div>
+            {/* Barcode Button: 1 col mobile, 4 cols desktop (Wait, desktop 4 cols would mean full row. Let's keep it compact or full width below) */}
+            {/* Let's make it col-span-1 on mobile to fit the grid perfectly (2x2), and distinct on desktop? */}
+            {/* Desktop is 4 cols. Camera(2) + Gallery(1) + Manual(1) = 4 (Full Row). Next Row: Barcode. */}
+            {/* Mobile is 2 cols. Camera(1) + Gallery(1) = 2 (Full Row). Manual(1) + Barcode(1) = 2 (Full Row). Perfect 2x2 Grid. */}
+            <button
+              onClick={() => setShowBarcodeScanner(true)}
+              className="col-span-1 md:col-span-4 flex flex-col md:flex-row items-center justify-center gap-2 md:gap-3 p-3 md:p-4 min-h-[90px] md:min-h-[64px] rounded-2xl border-2 border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 hover:border-amber-300 hover:shadow-lg active:scale-[0.98] transition-all duration-200 group"
+            >
+              <div className="w-9 h-9 md:w-8 md:h-8 bg-white rounded-lg flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
+                <ScanLine size={18} className="text-amber-600" />
+              </div>
+              <span className="font-semibold text-xs md:text-sm text-center md:text-left">
+                <span className="md:hidden">Código</span>
+                <span className="hidden md:inline">Escanear Código de Barras</span>
+              </span>
+            </button>
           </div>
         )}
 
@@ -750,51 +759,58 @@ const RegisterMeal: React.FC<RegisterMealProps> = ({ onSave, onUpdate, onDelete 
                 )}
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Nome do Prato</label>
-                  <input
-                    type="text"
-                    value={mealData.name}
-                    onChange={(e) => setMealData({ ...mealData, name: e.target.value })}
-                    placeholder={isAnalyzing ? "Identificando..." : "Ex: Salada Caesar"}
-                    className="w-full px-4 py-3 text-base rounded-xl border-2 border-gray-200 focus:border-teal-400 focus:ring-2 focus:ring-teal-100 outline-none transition bg-white min-h-[48px]"
-                  />
+              <div className="space-y-4">
+                {/* Nome e Tipo */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Nome do Prato</label>
+                    <input
+                      type="text"
+                      value={mealData.name}
+                      onChange={(e) => setMealData({ ...mealData, name: e.target.value })}
+                      placeholder={isAnalyzing ? "Identificando..." : "Ex: Salada Caesar"}
+                      className="w-full px-4 py-3 text-base rounded-xl border-2 border-gray-200 focus:border-teal-400 focus:ring-2 focus:ring-teal-100 outline-none transition bg-white min-h-[48px]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Tipo</label>
+                    <select
+                      value={mealData.type}
+                      onChange={(e) => setMealData({ ...mealData, type: e.target.value as any })}
+                      className="w-full px-4 py-3 text-base rounded-xl border-2 border-gray-200 focus:border-teal-400 focus:ring-2 focus:ring-teal-100 outline-none transition bg-white min-h-[48px]"
+                    >
+                      <option value="breakfast">Café da Manhã</option>
+                      <option value="lunch">Almoço</option>
+                      <option value="dinner">Jantar</option>
+                      <option value="snack">Lanche</option>
+                    </select>
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Tipo</label>
-                  <select
-                    value={mealData.type}
-                    onChange={(e) => setMealData({ ...mealData, type: e.target.value as any })}
-                    className="w-full px-4 py-3 text-base rounded-xl border-2 border-gray-200 focus:border-teal-400 focus:ring-2 focus:ring-teal-100 outline-none transition bg-white min-h-[48px]"
-                  >
-                    <option value="breakfast">Café da Manhã</option>
-                    <option value="lunch">Almoço</option>
-                    <option value="dinner">Jantar</option>
-                    <option value="snack">Lanche</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5 flex items-center gap-2">
-                    <Calendar size={16} /> Data
-                  </label>
-                  <input
-                    type="date"
-                    value={manualDate}
-                    onChange={(e) => setManualDate(e.target.value)}
-                    className="w-full px-4 py-3 text-base rounded-xl border-2 border-gray-200 focus:border-teal-400 focus:ring-2 focus:ring-teal-100 outline-none transition bg-white min-h-[48px]"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5 flex items-center gap-2">
-                    <Clock size={16} /> Horário
-                  </label>
-                  <input
-                    type="time"
-                    value={manualTime}
-                    onChange={(e) => setManualTime(e.target.value)}
-                    className="w-full px-4 py-3 text-base rounded-xl border-2 border-gray-200 focus:border-teal-400 focus:ring-2 focus:ring-teal-100 outline-none transition bg-white min-h-[48px]"
-                  />
+
+                {/* Data e Hora - Side by Side on Mobile too */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5 flex items-center gap-2">
+                      <Calendar size={16} /> Data
+                    </label>
+                    <input
+                      type="date"
+                      value={manualDate}
+                      onChange={(e) => setManualDate(e.target.value)}
+                      className="w-full px-3 md:px-4 py-3 text-sm md:text-base rounded-xl border-2 border-gray-200 focus:border-teal-400 focus:ring-2 focus:ring-teal-100 outline-none transition bg-white min-h-[48px]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5 flex items-center gap-2">
+                      <Clock size={16} /> Horário
+                    </label>
+                    <input
+                      type="time"
+                      value={manualTime}
+                      onChange={(e) => setManualTime(e.target.value)}
+                      className="w-full px-3 md:px-4 py-3 text-sm md:text-base rounded-xl border-2 border-gray-200 focus:border-teal-400 focus:ring-2 focus:ring-teal-100 outline-none transition bg-white min-h-[48px]"
+                    />
+                  </div>
                 </div>
               </div>
             </div>
@@ -817,9 +833,10 @@ const RegisterMeal: React.FC<RegisterMealProps> = ({ onSave, onUpdate, onDelete 
                 )}
               </div>
 
-              {/* Input Row */}
-              <div className="grid grid-cols-12 gap-2 md:gap-3 mb-4 items-end">
-                <div className="col-span-12 md:col-span-6 relative">
+              {/* Input Row - Mobile Optimized */}
+              <div className="space-y-3 md:space-y-0 md:grid md:grid-cols-12 md:gap-3 mb-4 md:items-end">
+                {/* Nome: Full width */}
+                <div className="col-span-12 md:col-span-5 relative">
                   <label className="block text-xs font-medium text-gray-500 mb-1">Nome</label>
                   <input
                     ref={ingredientInputRef}
@@ -854,39 +871,46 @@ const RegisterMeal: React.FC<RegisterMealProps> = ({ onSave, onUpdate, onDelete 
                     </div>
                   )}
                 </div>
-                <div className="col-span-5 md:col-span-3">
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Qtd</label>
-                  <input
-                    type="number"
-                    value={currentFood.quantity}
-                    onChange={(e) => setCurrentFood({ ...currentFood, quantity: e.target.value })}
-                    placeholder="100"
-                    className="w-full px-3 py-2.5 text-base rounded-lg border-2 border-gray-200 focus:border-teal-400 outline-none bg-white min-h-[44px]"
-                    onKeyDown={(e) => e.key === 'Enter' && addFoodItem()}
-                  />
+
+                {/* Qtd & Unit Row on Mobile */}
+                <div className="col-span-12 md:col-span-5 grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">Qtd</label>
+                    <input
+                      type="number"
+                      value={currentFood.quantity}
+                      onChange={(e) => setCurrentFood({ ...currentFood, quantity: e.target.value })}
+                      placeholder="100"
+                      className="w-full px-3 py-2.5 text-base rounded-lg border-2 border-gray-200 focus:border-teal-400 outline-none bg-white min-h-[44px]"
+                      onKeyDown={(e) => e.key === 'Enter' && addFoodItem()}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">Un</label>
+                    <select
+                      value={currentFood.unit}
+                      onChange={(e) => setCurrentFood({ ...currentFood, unit: e.target.value })}
+                      className="w-full px-2 py-2.5 text-base rounded-lg border-2 border-gray-200 focus:border-teal-400 outline-none bg-white min-h-[44px]"
+                    >
+                      <option value="g">g</option>
+                      <option value="ml">ml</option>
+                      <option value="colher">colher</option>
+                      <option value="xicara">xícara</option>
+                      <option value="unidade">unid.</option>
+                      <option value="fatia">fatia</option>
+                    </select>
+                  </div>
                 </div>
-                <div className="col-span-4 md:col-span-2">
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Un</label>
-                  <select
-                    value={currentFood.unit}
-                    onChange={(e) => setCurrentFood({ ...currentFood, unit: e.target.value })}
-                    className="w-full px-2 py-2.5 text-base rounded-lg border-2 border-gray-200 focus:border-teal-400 outline-none bg-white min-h-[44px]"
-                  >
-                    <option value="g">g</option>
-                    <option value="ml">ml</option>
-                    <option value="colher">colher</option>
-                    <option value="xicara">xícara</option>
-                    <option value="unidade">unid.</option>
-                    <option value="fatia">fatia</option>
-                  </select>
-                </div>
-                <div className="col-span-3 md:col-span-1">
+
+                {/* Add Button - Full Width on Mobile */}
+                <div className="col-span-12 md:col-span-2">
                   <button
                     type="button"
                     onClick={addFoodItem}
-                    className="w-full min-h-[44px] bg-teal-500 text-white rounded-lg hover:bg-teal-600 active:scale-[0.95] transition flex items-center justify-center shadow-sm"
+                    className="w-full min-h-[44px] bg-teal-500 text-white rounded-lg hover:bg-teal-600 active:scale-[0.95] transition flex items-center justify-center shadow-sm font-medium gap-2 md:gap-0"
                   >
                     <Plus size={20} />
+                    <span className="md:hidden">Adicionar</span>
                   </button>
                 </div>
               </div>
@@ -1066,11 +1090,11 @@ const RegisterMeal: React.FC<RegisterMealProps> = ({ onSave, onUpdate, onDelete 
             </div>
 
             {/* Save Button - Sticky on mobile */}
-            <div className="sticky bottom-0 left-0 right-0 bg-white/95 backdrop-blur-sm pt-4 pb-2 -mx-6 px-6 md:relative md:mx-0 md:px-0 md:bg-transparent md:backdrop-blur-none border-t border-gray-100 md:border-0 mt-6 md:mt-4">
+            <div className="sticky bottom-0 z-30 left-0 right-0 bg-white/95 backdrop-blur-sm pt-4 pb-6 -mx-6 px-6 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] md:relative md:mx-0 md:px-0 md:bg-transparent md:backdrop-blur-none md:shadow-none md:pb-0 border-t border-gray-100 md:border-0 mt-6 md:mt-4">
               <button
                 type="submit"
                 disabled={isAnalyzing}
-                className={`w-full text-white font-bold min-h-[56px] py-4 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 active:scale-[0.98] ${isAnalyzing
+                className={`w-full text-white font-bold min-h-[56px] py-4 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 active:scale-[0.98] shadow-lg ${isAnalyzing
                   ? 'bg-gray-400 cursor-not-allowed'
                   : 'bg-amber-gradient hover:opacity-95 hover:shadow-xl hover:shadow-orange-200/50'
                   }`}
@@ -1140,11 +1164,11 @@ const RegisterMeal: React.FC<RegisterMealProps> = ({ onSave, onUpdate, onDelete 
                   {group.meals.map((meal) => (
                     <div
                       key={meal.id}
-                      className="relative flex flex-col p-4 rounded-xl border border-gray-100 bg-gray-50/50 hover:bg-gray-100/50 hover:border-gray-200 transition-all duration-200 cursor-pointer active:scale-[0.99]"
+                      className="relative flex flex-col p-3 md:p-4 rounded-xl border border-gray-100 bg-gray-50/50 hover:bg-gray-100/50 hover:border-gray-200 transition-all duration-200 cursor-pointer active:scale-[0.99]"
                       onClick={() => setViewingMeal(meal)}
                     >
-                      <div className="flex items-center gap-3 min-h-[48px]">
-                        <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center text-xl shadow-sm overflow-hidden flex-shrink-0 border border-gray-100">
+                      <div className="flex items-center gap-3 min-h-[40px] md:min-h-[48px]">
+                        <div className="w-10 h-10 md:w-12 md:h-12 bg-white rounded-xl flex items-center justify-center text-base md:text-xl shadow-sm overflow-hidden flex-shrink-0 border border-gray-100">
                           {meal.image ? (
                             <img
                               src={meal.image}
@@ -1164,33 +1188,33 @@ const RegisterMeal: React.FC<RegisterMealProps> = ({ onSave, onUpdate, onDelete 
                         </div>
                         <div className="flex-1 min-w-0">
                           <h3 className="font-bold text-gray-800 truncate text-sm">{meal.name}</h3>
-                          <div className="flex flex-wrap gap-2 text-xs text-gray-500 mt-0.5">
-                            <span className="flex items-center gap-1"><Clock size={11} /> {meal.time}</span>
-                            {meal.weight && <span className="flex items-center gap-1"><Scale size={11} /> {meal.weight}g</span>}
+                          <div className="flex flex-wrap gap-2 text-[10px] md:text-xs text-gray-500 mt-0.5">
+                            <span className="flex items-center gap-1"><Clock size={10} className="md:w-[11px] md:h-[11px]" /> {meal.time}</span>
+                            {meal.weight && <span className="flex items-center gap-1"><Scale size={10} className="md:w-[11px] md:h-[11px]" /> {meal.weight}g</span>}
                           </div>
                         </div>
                         <div className="text-right flex-shrink-0">
-                          <span className="block font-bold text-base text-gray-900">{meal.calories}</span>
-                          <span className="text-[10px] text-gray-400">kcal</span>
+                          <span className="block font-bold text-sm md:text-base text-gray-900">{meal.calories}</span>
+                          <span className="text-[9px] md:text-[10px] text-gray-400">kcal</span>
                         </div>
                       </div>
                       {/* Macros + Actions */}
-                      <div className="flex items-center gap-2 mt-2.5 pt-2.5 border-t border-gray-100/50">
-                        <div className="flex gap-1.5 flex-1">
-                          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">P:{meal.macros.protein}g</span>
-                          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">C:{meal.macros.carbs}g</span>
-                          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-rose-100 text-rose-700">G:{meal.macros.fats}g</span>
+                      <div className="flex items-center gap-2 mt-2 pt-2 md:mt-2.5 md:pt-2.5 border-t border-gray-100/50">
+                        <div className="flex gap-1.5 flex-1 min-w-0 overflow-x-auto no-scrollbar">
+                          <span className="text-[9px] md:text-[10px] font-medium px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 whitespace-nowrap">P:{meal.macros.protein}g</span>
+                          <span className="text-[9px] md:text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 whitespace-nowrap">C:{meal.macros.carbs}g</span>
+                          <span className="text-[9px] md:text-[10px] font-medium px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 whitespace-nowrap">G:{meal.macros.fats}g</span>
                         </div>
                         <div className="flex gap-0.5">
-                          <button onClick={(e) => { e.stopPropagation(); loadMealIntoForm(meal, 'copy'); }} className="p-2 rounded-lg text-gray-400 hover:text-teal-600 hover:bg-white transition" title="Duplicar"><Copy size={16} /></button>
-                          <button onClick={(e) => { e.stopPropagation(); loadMealIntoForm(meal, 'edit'); }} className="p-2 rounded-lg text-gray-400 hover:text-amber-600 hover:bg-white transition" title="Editar"><Edit2 size={16} /></button>
+                          <button onClick={(e) => { e.stopPropagation(); loadMealIntoForm(meal, 'copy'); }} className="p-1.5 md:p-2 rounded-lg text-gray-400 hover:text-teal-600 hover:bg-white transition" title="Duplicar"><Copy size={14} className="md:w-4 md:h-4" /></button>
+                          <button onClick={(e) => { e.stopPropagation(); loadMealIntoForm(meal, 'edit'); }} className="p-1.5 md:p-2 rounded-lg text-gray-400 hover:text-amber-600 hover:bg-white transition" title="Editar"><Edit2 size={14} className="md:w-4 md:h-4" /></button>
                           <button
                             onClick={(e) => { e.stopPropagation(); if (confirm('Excluir esta refeição?')) handleDeleteMeal(meal.id); }}
                             disabled={deletingId === meal.id}
-                            className="p-2 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition disabled:opacity-50"
+                            className="p-1.5 md:p-2 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition disabled:opacity-50"
                             title="Excluir"
                           >
-                            {deletingId === meal.id ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                            {deletingId === meal.id ? <Loader2 size={14} className="animate-spin md:w-4 md:h-4" /> : <Trash2 size={14} className="md:w-4 md:h-4" />}
                           </button>
                         </div>
                       </div>
