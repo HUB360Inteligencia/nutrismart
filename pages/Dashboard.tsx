@@ -24,6 +24,7 @@ import SymptomModal from '../components/SymptomModal';
 import WeightGoalCard from '../components/WeightGoalCard';
 import { getWeeklyChallenge, addXP, checkWeightBadges } from '../services/gamificationService';
 import { logSymptom, addWeightEntry, updateProfile } from '../services/databaseService';
+import { getLocalDateString } from '../utils/dateUtils';
 import WeightInsightsCard from '../components/WeightInsightsCard';
 import MilestoneModal from '../components/MilestoneModal';
 
@@ -154,7 +155,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, userId, stats, updateWater,
     if (!weightValue || weightValue <= 0) return;
 
     setIsSavingWeight(true);
-    const today = new Date().toISOString().split('T')[0];
+    const today = getLocalDateString();
     const success = await addWeightEntry(userId, weightValue, today);
 
     if (success) {

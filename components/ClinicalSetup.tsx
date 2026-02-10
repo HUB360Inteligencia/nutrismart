@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Syringe, Calendar, Pill, AlertCircle, Clock } from 'lucide-react';
 import { ClinicalSettings } from '../types';
+import { getLocalDateString } from '../utils/dateUtils';
 
 interface ClinicalSetupProps {
     onComplete: (settings: ClinicalSettings | undefined) => void;
@@ -55,7 +56,7 @@ const ClinicalSetup: React.FC<ClinicalSetupProps> = ({ onComplete, initialSettin
     const [intervalDays, setIntervalDays] = useState(initialSettings?.intervalDays ?? 7);
     const [injectionDay, setInjectionDay] = useState(initialSettings?.injectionDay ?? 1);
     const [startDate, setStartDate] = useState(
-        initialSettings?.startDate || new Date().toISOString().split('T')[0]
+        initialSettings?.startDate || getLocalDateString()
     );
 
     useEffect(() => {
@@ -182,10 +183,10 @@ const ClinicalSetup: React.FC<ClinicalSetupProps> = ({ onComplete, initialSettin
                                 <button
                                     key={day.value}
                                     onClick={() => setInjectionDay(day.value)}
-                                    className={`py-3 rounded-xl text-xs font-bold transition-all ${injectionDay === day.value
+                                    className={`py - 3 rounded - xl text - xs font - bold transition - all ${injectionDay === day.value
                                         ? 'bg-teal-500 text-white shadow-lg shadow-teal-500/30'
                                         : 'bg-gray-50 text-gray-500 hover:bg-gray-100'
-                                        }`}
+                                        } `}
                                 >
                                     {day.label.substring(0, 3)}
                                 </button>

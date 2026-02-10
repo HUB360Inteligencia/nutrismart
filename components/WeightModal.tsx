@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { X, Scale, Calendar, TrendingDown, TrendingUp, Minus } from 'lucide-react';
+import { getLocalDateString } from '../utils/dateUtils';
 
 interface WeightModalProps {
     isOpen: boolean;
@@ -10,7 +11,7 @@ interface WeightModalProps {
 
 const WeightModal: React.FC<WeightModalProps> = ({ isOpen, onClose, onSubmit, currentWeight }) => {
     const [weight, setWeight] = useState(currentWeight?.toString() || '');
-    const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+    const [date, setDate] = useState(getLocalDateString());
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
@@ -91,8 +92,8 @@ const WeightModal: React.FC<WeightModalProps> = ({ isOpen, onClose, onSubmit, cu
                         {/* Weight diff indicator */}
                         {weightDiff !== 0 && (
                             <div className={`flex items-center justify-center gap-2 mt-3 p-2 rounded-lg ${weightDiff < 0
-                                    ? 'bg-green-50 text-green-600'
-                                    : 'bg-orange-50 text-orange-600'
+                                ? 'bg-green-50 text-green-600'
+                                : 'bg-orange-50 text-orange-600'
                                 }`}>
                                 {weightDiff < 0 ? <TrendingDown size={18} /> : <TrendingUp size={18} />}
                                 <span className="font-medium">
@@ -112,7 +113,7 @@ const WeightModal: React.FC<WeightModalProps> = ({ isOpen, onClose, onSubmit, cu
                             type="date"
                             value={date}
                             onChange={(e) => setDate(e.target.value)}
-                            max={new Date().toISOString().split('T')[0]}
+                            max={getLocalDateString()}
                             className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-nutri-500 focus:ring-4 focus:ring-nutri-100 transition-all"
                         />
                     </div>

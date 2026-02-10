@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Camera, Save, Plus, Loader2, Image as ImageIcon, X, PenTool, Scale, Calendar, Clock, Trash2, Calculator, History, Eye, Copy, Edit2, ChevronRight, ScanLine, Sparkles } from 'lucide-react';
 import { Meal } from '../types';
 import { analyzeFoodImage, calculateNutritionalInfo } from '../services/geminiService';
+import { getLocalDateString } from '../utils/dateUtils';
 import BarcodeScanner from '../components/BarcodeScanner';
 import { BarcodeProduct, calculateNutritionForServing } from '../services/barcodeService';
 import { searchIngredients } from '../data/brazilianIngredients';
@@ -36,7 +37,7 @@ const RegisterMeal: React.FC<RegisterMealProps> = ({ onSave, onUpdate, history =
   // State for List (Used for both Manual and AI Edited)
   const [foodItems, setFoodItems] = useState<FoodItem[]>([]);
   const [currentFood, setCurrentFood] = useState({ name: '', quantity: '', unit: 'g' });
-  const [manualDate, setManualDate] = useState(new Date().toISOString().split('T')[0]);
+  const [manualDate, setManualDate] = useState(getLocalDateString());
   const [manualTime, setManualTime] = useState(new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }));
 
   const [mealData, setMealData] = useState({
@@ -81,7 +82,7 @@ const RegisterMeal: React.FC<RegisterMealProps> = ({ onSave, onUpdate, history =
     setInputMode('none');
     setFoodItems([]);
     setEditingId(null);
-    setManualDate(new Date().toISOString().split('T')[0]);
+    setManualDate(getLocalDateString());
     setManualTime(new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }));
   };
 
@@ -238,7 +239,7 @@ const RegisterMeal: React.FC<RegisterMealProps> = ({ onSave, onUpdate, history =
     } else {
       setEditingId(null);
       // Reset to now for copies
-      setManualDate(new Date().toISOString().split('T')[0]);
+      setManualDate(getLocalDateString());
       setManualTime(new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }));
     }
 
@@ -700,7 +701,7 @@ const RegisterMeal: React.FC<RegisterMealProps> = ({ onSave, onUpdate, history =
             </div>
 
             {/* Ingredients List */}
-            <div className="bg-gray-50 p-6 rounded-xl border border-gray-100 relative overflow-hidden">
+            <div className="bg-gray-50 p-4 md:p-6 rounded-xl border border-gray-100 relative overflow-hidden">
               {isAnalyzing && (
                 <div className="absolute inset-0 bg-white/50 backdrop-blur-[1px] z-10 flex items-center justify-center">
                   {/* Overlay to prevent editing while AI is thinking */}
@@ -708,15 +709,18 @@ const RegisterMeal: React.FC<RegisterMealProps> = ({ onSave, onUpdate, history =
               )}
 
               <div className="flex justify-between items-center mb-4">
-                <h4 className="font-semibold text-gray-700">Ingredientes</h4>
+                <h4 className="font-semibold text-gray-700 flex items-center gap-2">
+                  <span className="w-1.5 h-5 bg-teal-500 rounded-full inline-block"></span>
+                  Ingredientes
+                </h4>
                 {previewImage && !isAnalyzing && (
-                  <span className="text-xs bg-nutri-100 text-nutri-700 px-2 py-1 rounded-md">Detectado por IA - Você pode editar</span>
+                  <span className="text-[10px] md:text-xs bg-teal-50 text-teal-700 px-2 py-1 rounded-md font-medium border border-teal-200">✨ IA detectou · edite à vontade</span>
                 )}
               </div>
 
               {/* Input Row */}
-              <div className="grid grid-cols-1 md:grid-cols-12 gap-3 mb-4 items-end">
-                <div className="md:col-span-6 relative">
+              <div className="grid grid-cols-12 gap-2 md:gap-3 mb-4 items-end">
+                <div className="col-span-12 md:col-span-6 relative">
                   <label className="block text-xs font-medium text-gray-500 mb-1">Nome</label>
                   <input
                     ref={ingredientInputRef}
@@ -724,25 +728,25 @@ const RegisterMeal: React.FC<RegisterMealProps> = ({ onSave, onUpdate, history =
                     value={currentFood.name}
                     onChange={(e) => handleIngredientInputChange(e.target.value)}
                     placeholder="Digite o ingrediente..."
-                    className="w-full px-3 py-2.5 rounded-lg border border-gray-200 focus:border-nutri-500 focus:ring-2 focus:ring-nutri-100 outline-none text-sm bg-white"
+                    className="w-full px-3 py-2.5 text-base rounded-lg border-2 border-gray-200 focus:border-teal-400 focus:ring-2 focus:ring-teal-100 outline-none bg-white min-h-[44px]"
                     onKeyDown={handleIngredientKeyDown}
                     onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
                     autoComplete="off"
                   />
                   {/* Autocomplete Dropdown */}
                   {showSuggestions && ingredientSuggestions.length > 0 && (
-                    <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                    <div className="absolute z-50 w-full mt-1 bg-white border-2 border-teal-200 rounded-xl shadow-lg shadow-teal-100/50 max-h-60 overflow-y-auto">
                       {ingredientSuggestions.map((suggestion, index) => (
                         <button
                           key={suggestion}
                           type="button"
-                          className={`w-full px-3 py-2.5 text-left text-sm transition flex items-center gap-2 ${index === selectedSuggestionIndex
-                            ? 'bg-nutri-50 text-nutri-700'
+                          className={`w-full px-3 py-2.5 text-left text-sm transition flex items-center gap-2 min-h-[44px] ${index === selectedSuggestionIndex
+                            ? 'bg-teal-50 text-teal-700'
                             : 'hover:bg-gray-50 text-gray-700'
                             }`}
                           onMouseDown={() => selectSuggestion(suggestion)}
                         >
-                          <span className="w-6 h-6 rounded-full bg-gradient-to-br from-nutri-100 to-nutri-200 flex items-center justify-center text-xs font-medium text-nutri-700">
+                          <span className="w-7 h-7 rounded-full bg-gradient-to-br from-teal-100 to-emerald-200 flex items-center justify-center text-xs font-medium text-teal-700 flex-shrink-0">
                             {suggestion.charAt(0).toUpperCase()}
                           </span>
                           <span>{suggestion}</span>
@@ -751,23 +755,23 @@ const RegisterMeal: React.FC<RegisterMealProps> = ({ onSave, onUpdate, history =
                     </div>
                   )}
                 </div>
-                <div className="md:col-span-3">
+                <div className="col-span-5 md:col-span-3">
                   <label className="block text-xs font-medium text-gray-500 mb-1">Qtd</label>
                   <input
                     type="number"
                     value={currentFood.quantity}
                     onChange={(e) => setCurrentFood({ ...currentFood, quantity: e.target.value })}
                     placeholder="100"
-                    className="w-full px-3 py-2.5 rounded-lg border border-gray-200 focus:border-nutri-500 outline-none text-sm bg-white"
+                    className="w-full px-3 py-2.5 text-base rounded-lg border-2 border-gray-200 focus:border-teal-400 outline-none bg-white min-h-[44px]"
                     onKeyDown={(e) => e.key === 'Enter' && addFoodItem()}
                   />
                 </div>
-                <div className="md:col-span-2">
+                <div className="col-span-4 md:col-span-2">
                   <label className="block text-xs font-medium text-gray-500 mb-1">Un</label>
                   <select
                     value={currentFood.unit}
                     onChange={(e) => setCurrentFood({ ...currentFood, unit: e.target.value })}
-                    className="w-full px-3 py-2.5 rounded-lg border border-gray-200 focus:border-nutri-500 outline-none text-sm bg-white"
+                    className="w-full px-2 py-2.5 text-base rounded-lg border-2 border-gray-200 focus:border-teal-400 outline-none bg-white min-h-[44px]"
                   >
                     <option value="g">g</option>
                     <option value="ml">ml</option>
@@ -777,11 +781,11 @@ const RegisterMeal: React.FC<RegisterMealProps> = ({ onSave, onUpdate, history =
                     <option value="fatia">fatia</option>
                   </select>
                 </div>
-                <div className="md:col-span-1">
+                <div className="col-span-3 md:col-span-1">
                   <button
                     type="button"
                     onClick={addFoodItem}
-                    className="w-full py-2.5 bg-nutri-500 text-white rounded-lg hover:bg-nutri-600 transition flex items-center justify-center"
+                    className="w-full min-h-[44px] bg-teal-500 text-white rounded-lg hover:bg-teal-600 active:scale-[0.95] transition flex items-center justify-center shadow-sm"
                   >
                     <Plus size={20} />
                   </button>
@@ -908,49 +912,56 @@ const RegisterMeal: React.FC<RegisterMealProps> = ({ onSave, onUpdate, history =
             </div>
 
             {/* Totals Section */}
-            <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm relative overflow-hidden">
+            <div className="bg-white p-5 md:p-6 rounded-xl border border-gray-100 shadow-sm relative overflow-hidden">
               {isAnalyzing && (
                 <div className="absolute inset-0 bg-white/70 backdrop-blur-[1px] z-10 flex items-center justify-center">
-                  <Loader2 className="animate-spin text-nutri-500" />
+                  <Loader2 className="animate-spin text-teal-500" />
                 </div>
               )}
-              <h4 className="font-semibold text-gray-800 mb-4 border-l-4 border-nutri-500 pl-3">Totais da Refeição</h4>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Calorias (kcal)</label>
+              <h4 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                <Scale size={18} className="text-teal-500" />
+                Totais da Refeição
+              </h4>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-xl p-3 border border-orange-100">
+                  <label className="block text-xs font-medium text-orange-600 mb-1.5">🔥 Calorias</label>
                   <input
                     type="number"
                     value={mealData.calories}
                     onChange={(e) => setMealData({ ...mealData, calories: e.target.value })}
-                    className="w-full px-3 py-2 rounded-lg border border-gray-200 bg-gray-50 text-gray-900 font-bold focus:border-nutri-500 outline-none"
+                    className="w-full px-3 py-2 text-base rounded-lg border-2 border-orange-200 bg-white text-gray-900 font-bold focus:border-orange-400 outline-none min-h-[44px]"
                   />
+                  <span className="text-[10px] text-orange-400 mt-1 block">kcal</span>
                 </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Proteínas (g)</label>
+                <div className="bg-gradient-to-br from-blue-50 to-sky-50 rounded-xl p-3 border border-blue-100">
+                  <label className="block text-xs font-medium text-blue-600 mb-1.5">💪 Proteínas</label>
                   <input
                     type="number"
                     value={mealData.protein}
                     onChange={(e) => setMealData({ ...mealData, protein: e.target.value })}
-                    className="w-full px-3 py-2 rounded-lg border border-gray-200 bg-blue-50/50 text-blue-900 focus:border-blue-500 outline-none"
+                    className="w-full px-3 py-2 text-base rounded-lg border-2 border-blue-200 bg-white text-gray-900 font-bold focus:border-blue-400 outline-none min-h-[44px]"
                   />
+                  <span className="text-[10px] text-blue-400 mt-1 block">gramas</span>
                 </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Carboidratos (g)</label>
+                <div className="bg-gradient-to-br from-amber-50 to-yellow-50 rounded-xl p-3 border border-amber-100">
+                  <label className="block text-xs font-medium text-amber-600 mb-1.5">⚡ Carboidratos</label>
                   <input
                     type="number"
                     value={mealData.carbs}
                     onChange={(e) => setMealData({ ...mealData, carbs: e.target.value })}
-                    className="w-full px-3 py-2 rounded-lg border border-gray-200 bg-yellow-50/50 text-yellow-900 focus:border-yellow-500 outline-none"
+                    className="w-full px-3 py-2 text-base rounded-lg border-2 border-amber-200 bg-white text-gray-900 font-bold focus:border-amber-400 outline-none min-h-[44px]"
                   />
+                  <span className="text-[10px] text-amber-400 mt-1 block">gramas</span>
                 </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Gorduras (g)</label>
+                <div className="bg-gradient-to-br from-rose-50 to-pink-50 rounded-xl p-3 border border-rose-100">
+                  <label className="block text-xs font-medium text-rose-600 mb-1.5">🥑 Gorduras</label>
                   <input
                     type="number"
                     value={mealData.fats}
                     onChange={(e) => setMealData({ ...mealData, fats: e.target.value })}
-                    className="w-full px-3 py-2 rounded-lg border border-gray-200 bg-red-50/50 text-red-900 focus:border-red-500 outline-none"
+                    className="w-full px-3 py-2 text-base rounded-lg border-2 border-rose-200 bg-white text-gray-900 font-bold focus:border-rose-400 outline-none min-h-[44px]"
                   />
+                  <span className="text-[10px] text-rose-400 mt-1 block">gramas</span>
                 </div>
               </div>
             </div>
@@ -1067,82 +1078,98 @@ const RegisterMeal: React.FC<RegisterMealProps> = ({ onSave, onUpdate, history =
 
       {/* Details Modal */}
       {viewingMeal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
-          <div className="bg-white rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/50 backdrop-blur-sm animate-fade-in" onClick={() => setViewingMeal(null)}>
+          <div className="bg-white rounded-t-2xl md:rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl flex flex-col max-h-[92vh] md:max-h-[90vh] md:m-4 animate-scale-in" onClick={(e) => e.stopPropagation()}>
+
+            {/* Drag Handle (mobile) */}
+            <div className="md:hidden flex justify-center py-2 flex-shrink-0">
+              <div className="w-10 h-1 bg-gray-300 rounded-full" />
+            </div>
 
             {/* Modal Header & Image */}
-            <div className="relative h-48 bg-gray-100 flex-shrink-0">
+            <div className="relative h-40 md:h-48 bg-gray-100 flex-shrink-0">
               {viewingMeal.image ? (
                 <img src={viewingMeal.image} alt={viewingMeal.name} className="w-full h-full object-cover" />
               ) : (
-                <div className="w-full h-full flex items-center justify-center bg-nutri-50 text-nutri-200">
-                  <ImageIcon size={64} />
+                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-teal-50 to-emerald-100 text-teal-200">
+                  <ImageIcon size={56} />
                 </div>
               )}
               <button
                 onClick={() => setViewingMeal(null)}
-                className="absolute top-4 right-4 bg-black/30 hover:bg-black/50 text-white p-2 rounded-full backdrop-blur-md transition"
+                className="absolute top-3 right-3 bg-black/30 hover:bg-black/50 text-white p-2.5 rounded-full backdrop-blur-md transition min-w-[44px] min-h-[44px] flex items-center justify-center"
               >
                 <X size={20} />
               </button>
-              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-6">
-                <h2 className="text-2xl font-bold text-white">{viewingMeal.name}</h2>
-                <p className="text-white/80 text-sm flex items-center gap-2">
+              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-4 md:p-6">
+                <h2 className="text-xl md:text-2xl font-bold text-white leading-tight">{viewingMeal.name}</h2>
+                <p className="text-white/80 text-sm flex items-center gap-2 mt-1">
                   <Clock size={14} /> {viewingMeal.date?.split('T')[0]} às {viewingMeal.time}
                 </p>
               </div>
             </div>
 
             {/* Modal Content */}
-            <div className="p-6 overflow-y-auto">
+            <div className="p-4 md:p-6 overflow-y-auto">
 
               {/* Macros Grid */}
-              <div className="grid grid-cols-4 gap-3 mb-6">
-                <div className="bg-gray-50 rounded-xl p-3 text-center border border-gray-100">
-                  <div className="text-xs text-gray-500 mb-1">Calorias</div>
-                  <div className="font-bold text-gray-900">{viewingMeal.calories}</div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 mb-5">
+                <div className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-xl p-3 text-center border border-orange-100">
+                  <div className="text-[10px] text-orange-500 font-medium mb-0.5">🔥 Calorias</div>
+                  <div className="font-bold text-lg text-gray-900">{viewingMeal.calories}</div>
+                  <div className="text-[10px] text-orange-400">kcal</div>
                 </div>
-                <div className="bg-blue-50 rounded-xl p-3 text-center border border-blue-100">
-                  <div className="text-xs text-blue-600 mb-1">Proteínas</div>
-                  <div className="font-bold text-blue-900">{viewingMeal.macros.protein}g</div>
+                <div className="bg-gradient-to-br from-blue-50 to-sky-50 rounded-xl p-3 text-center border border-blue-100">
+                  <div className="text-[10px] text-blue-500 font-medium mb-0.5">💪 Proteínas</div>
+                  <div className="font-bold text-lg text-gray-900">{viewingMeal.macros.protein}g</div>
                 </div>
-                <div className="bg-yellow-50 rounded-xl p-3 text-center border border-yellow-100">
-                  <div className="text-xs text-yellow-600 mb-1">Carboid.</div>
-                  <div className="font-bold text-yellow-900">{viewingMeal.macros.carbs}g</div>
+                <div className="bg-gradient-to-br from-amber-50 to-yellow-50 rounded-xl p-3 text-center border border-amber-100">
+                  <div className="text-[10px] text-amber-500 font-medium mb-0.5">⚡ Carboid.</div>
+                  <div className="font-bold text-lg text-gray-900">{viewingMeal.macros.carbs}g</div>
                 </div>
-                <div className="bg-red-50 rounded-xl p-3 text-center border border-red-100">
-                  <div className="text-xs text-red-600 mb-1">Gorduras</div>
-                  <div className="font-bold text-red-900">{viewingMeal.macros.fats}g</div>
+                <div className="bg-gradient-to-br from-rose-50 to-pink-50 rounded-xl p-3 text-center border border-rose-100">
+                  <div className="text-[10px] text-rose-500 font-medium mb-0.5">🥑 Gorduras</div>
+                  <div className="font-bold text-lg text-gray-900">{viewingMeal.macros.fats}g</div>
                 </div>
               </div>
 
               {/* Ingredients List */}
               <h3 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
-                Ingredientes <span className="text-xs font-normal text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{(viewingMeal.ingredients || []).length} itens</span>
+                Ingredientes
+                <span className="text-[10px] font-medium text-teal-600 bg-teal-50 px-2 py-0.5 rounded-full border border-teal-100">
+                  {(viewingMeal.ingredients || []).length} itens
+                </span>
               </h3>
 
-              <div className="space-y-2 mb-6">
+              <div className="space-y-1.5 mb-4">
                 {(viewingMeal.ingredients && viewingMeal.ingredients.length > 0) ? (
                   viewingMeal.ingredients.map((ing, idx) => (
-                    <div key={idx} className="flex justify-between items-center py-2 border-b border-gray-50 last:border-0 text-sm">
-                      <span className="text-gray-700 font-medium">{ing.name}</span>
-                      <span className="text-gray-500">{ing.quantity} {ing.unit}</span>
+                    <div key={idx} className="flex items-center justify-between p-2.5 rounded-lg bg-gray-50/80 hover:bg-gray-100/80 transition">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-7 h-7 rounded-full bg-teal-50 text-teal-600 flex items-center justify-center text-[10px] font-bold flex-shrink-0">
+                          {ing.name.charAt(0).toUpperCase()}
+                        </div>
+                        <span className="text-gray-700 font-medium text-sm">{ing.name}</span>
+                      </div>
+                      <span className="text-xs text-gray-500 bg-white px-2 py-1 rounded-md border border-gray-100">{ing.quantity} {ing.unit}</span>
                     </div>
                   ))
                 ) : (
-                  <p className="text-sm text-gray-400 italic">Ingredientes não detalhados.</p>
+                  <div className="text-center py-6 text-gray-400">
+                    <p className="text-sm italic">Ingredientes não detalhados.</p>
+                  </div>
                 )}
               </div>
             </div>
 
             {/* Footer Actions */}
-            <div className="p-4 border-t border-gray-100 flex gap-3 bg-gray-50 mt-auto">
+            <div className="p-4 border-t border-gray-100 flex gap-3 bg-gray-50/80 mt-auto flex-shrink-0">
               <button
                 onClick={() => {
                   loadMealIntoForm(viewingMeal, 'edit');
                   setViewingMeal(null);
                 }}
-                className="flex-1 py-3 rounded-xl border border-gray-200 text-gray-700 font-semibold hover:bg-white hover:border-yellow-200 hover:text-yellow-600 transition flex items-center justify-center gap-2"
+                className="flex-1 py-3 min-h-[48px] rounded-xl border-2 border-gray-200 text-gray-700 font-semibold hover:border-teal-300 hover:text-teal-700 hover:bg-teal-50/50 active:scale-[0.98] transition flex items-center justify-center gap-2"
               >
                 <Edit2 size={18} /> Editar
               </button>
@@ -1151,7 +1178,7 @@ const RegisterMeal: React.FC<RegisterMealProps> = ({ onSave, onUpdate, history =
                   loadMealIntoForm(viewingMeal, 'copy');
                   setViewingMeal(null);
                 }}
-                className="flex-1 py-3 rounded-xl bg-nutri-500 text-white font-semibold hover:bg-nutri-600 transition flex items-center justify-center gap-2"
+                className="flex-1 py-3 min-h-[48px] rounded-xl bg-teal-500 text-white font-semibold hover:bg-teal-600 active:scale-[0.98] transition flex items-center justify-center gap-2 shadow-lg shadow-teal-500/20"
               >
                 <Copy size={18} /> Duplicar
               </button>

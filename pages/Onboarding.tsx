@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import ClinicalSetup from '../components/ClinicalSetup';
 import { ClinicalSettings, WeightGoal, WeightEntry } from '../types';
+import { getLocalDateString } from '../utils/dateUtils';
 import {
     Gender,
     Goal,
@@ -181,7 +182,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ userName, onComplete }) => {
                 isClinicalMode,
                 clinicalSettings,
                 weightGoal: weightGoalData,
-                weightHistory: weight > 0 ? [{ date: new Date().toISOString().split('T')[0], weight, source: 'manual' as const }] : []
+                weightHistory: weight > 0 ? [{ date: getLocalDateString(), weight, source: 'manual' as const }] : []
             });
         } finally {
             setIsSubmitting(false);
@@ -718,8 +719,8 @@ const Onboarding: React.FC<OnboardingProps> = ({ userName, onComplete }) => {
                                             onClick={handleComplete}
                                             disabled={isSubmitting || (isClinicalMode && !clinicalSettings)}
                                             className={`flex items-center gap-3 px-8 py-4 ${isClinicalMode
-                                                    ? 'bg-teal-500 hover:bg-teal-600 shadow-teal-500/30 hover:shadow-teal-500/50'
-                                                    : 'bg-nutri-500 hover:bg-nutri-600 shadow-nutri-500/30 hover:shadow-nutri-500/50'
+                                                ? 'bg-teal-500 hover:bg-teal-600 shadow-teal-500/30 hover:shadow-teal-500/50'
+                                                : 'bg-nutri-500 hover:bg-nutri-600 shadow-nutri-500/30 hover:shadow-nutri-500/50'
                                                 } disabled:bg-gray-200 disabled:text-gray-400 text-white rounded-[1.25rem] transition-all font-bold shadow-lg hover:scale-105 active:scale-95`}
                                         >
                                             {isSubmitting ? (

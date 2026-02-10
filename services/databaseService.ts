@@ -1,5 +1,6 @@
 import { supabase } from './supabaseClient';
 import type { User, Meal, Exercise, DailyStats, ClinicalSettings, Symptom } from '../types';
+import { getLocalDateString } from '../utils/dateUtils';
 
 // ============ PROFILE FUNCTIONS ============
 
@@ -176,7 +177,7 @@ export async function getMeals(userId: string, date?: string): Promise<Meal[]> {
 }
 
 export async function getTodayMeals(userId: string): Promise<Meal[]> {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getLocalDateString();
     return getMeals(userId, today);
 }
 
@@ -197,7 +198,7 @@ export async function addMeal(userId: string, meal: Omit<Meal, 'id'>): Promise<M
         name: meal.name.trim(),
         meal_type: meal.type || 'snack',
         time: meal.time || new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-        date: meal.date?.split('T')[0] || new Date().toISOString().split('T')[0],
+        date: meal.date?.split('T')[0] || getLocalDateString(),
         // IMPORTANT: PostgreSQL columns are INTEGER type, so we MUST round to avoid "22P02" error
         calories: Math.round(Math.max(0, meal.calories || 0)),
         weight_grams: meal.weight && meal.weight > 0 ? Math.round(meal.weight) : null,
@@ -321,7 +322,7 @@ export async function getExercises(userId: string, date?: string): Promise<Exerc
 }
 
 export async function getTodayExercises(userId: string): Promise<Exercise[]> {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getLocalDateString();
     return getExercises(userId, today);
 }
 
@@ -335,7 +336,7 @@ export async function addExercise(userId: string, exercise: Omit<Exercise, 'id'>
             calories_burned: exercise.caloriesBurned,
             intensity: exercise.intensity,
             time: exercise.time,
-            date: exercise.date?.split('T')[0] || new Date().toISOString().split('T')[0],
+            date: exercise.date?.split('T')[0] || getLocalDateString(),
         })
         .select()
         .single();
@@ -389,7 +390,7 @@ export async function getDailyLog(userId: string, date: string) {
 }
 
 export async function updateWaterConsumption(userId: string, amount: number, date?: string): Promise<number> {
-    const targetDate = date || new Date().toISOString().split('T')[0];
+    const targetDate = date || getLocalDateString();
 
     // Try to get existing log
     const existingLog = await getDailyLog(userId, targetDate);
@@ -431,7 +432,7 @@ export async function updateWaterConsumption(userId: string, amount: number, dat
 }
 
 export async function getTodayWater(userId: string): Promise<number> {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getLocalDateString();
     const log = await getDailyLog(userId, today);
     return log?.water_consumed || 0;
 }
@@ -492,7 +493,7 @@ export async function getWeightHistory(userId: string, limit = 30) {
 }
 
 export async function addWeightEntry(userId: string, weight: number, date?: string): Promise<boolean> {
-    const targetDate = date || new Date().toISOString().split('T')[0];
+    const targetDate = date || getLocalDateString();
 
     const { error } = await supabase
         .from('weight_history')
@@ -518,7 +519,7 @@ export async function addWeightEntry(userId: string, weight: number, date?: stri
 // ============ STATS CALCULATION ============
 
 export async function calculateDailyStats(userId: string, date?: string): Promise<DailyStats> {
-    const targetDate = date || new Date().toISOString().split('T')[0];
+    const targetDate = date || getLocalDateString();
 
     const [meals, exercises, waterLog] = await Promise.all([
         getMeals(userId, targetDate),
@@ -546,7 +547,7 @@ export async function getWeeklyStats(userId: string): Promise<{ date: string; st
     for (let i = 6; i >= 0; i--) {
         const d = new Date(today);
         d.setDate(today.getDate() - i);
-        dates.push(d.toISOString().split('T')[0]);
+        dates.push(getLocalDateString(d));
     }
 
     const startDate = dates[0];
@@ -594,8 +595,8 @@ export async function calculateStreak(userId: string): Promise<number> {
     const startDate = new Date();
     startDate.setDate(today.getDate() - 30);
 
-    const startStr = startDate.toISOString().split('T')[0];
-    const endStr = today.toISOString().split('T')[0];
+    const startStr = getLocalDateString(startDate);
+    const endStr = getLocalDateString(today);
 
     const [{ data: meals }, { data: exercises }, { data: logs }] = await Promise.all([
         supabase.from('meals').select('date').eq('user_id', userId).gte('date', startStr).lte('date', endStr),
@@ -617,7 +618,7 @@ export async function calculateStreak(userId: string): Promise<number> {
     for (let i = 0; i < 30; i++) {
         const d = new Date(today);
         d.setDate(today.getDate() - i);
-        const dateStr = d.toISOString().split('T')[0];
+        const dateStr = getLocalDateString(d);
 
         if (activeDates.has(dateStr)) {
             streak++;
@@ -762,7 +763,7 @@ export interface WeeklyChallengeDB {
 }
 
 export async function getActiveChallenge(userId: string): Promise<WeeklyChallengeDB | null> {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getLocalDateString();
 
     const { data, error } = await supabase
         .from('weekly_challenges')
@@ -1042,7 +1043,7 @@ export async function getRecentSymptoms(userId: string, days = 7): Promise<Sympt
         .from('clinical_symptoms')
         .select('*')
         .eq('user_id', userId)
-        .gte('date', startDate.toISOString().split('T')[0])
+        .gte('date', getLocalDateString(startDate))
         .order('created_at', { ascending: false });
 
     if (error) {

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { MessageCircle, X, Send, Loader2, Sparkles, Trash2 } from 'lucide-react';
 import { User, DailyStats, Meal } from '../types';
 import { generateChatResponse } from '../services/geminiService';
+import { getLocalDateString } from '../utils/dateUtils';
 import { useAuth } from '../contexts/AuthContext';
 import {
     ChatMessage,
@@ -76,7 +77,7 @@ const AIChat: React.FC<AIChatProps> = ({ user, stats, meals }) => {
             const historyText = formatMessagesForAI(contextMessages);
 
             // Get today's meals
-            const today = new Date().toISOString().split('T')[0];
+            const today = getLocalDateString();
             const todayMeals = meals.filter(m => m.date === today || !m.date);
 
             // Generate response
